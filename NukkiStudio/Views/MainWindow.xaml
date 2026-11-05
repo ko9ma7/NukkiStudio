@@ -134,6 +134,32 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="TabToggleButton" TargetType="ToggleButton">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="Foreground" Value="#94A3B8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4F46E5" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -299,7 +325,7 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <ToggleButton IsChecked="{Binding IsColorPickerActive}" Style="{StaticResource TabRadioButton}" Padding="10,6" Margin="0,0,8,0" ToolTip="화면에서 배경색 직접 스포이트 추출">
+                            <ToggleButton IsChecked="{Binding IsColorPickerActive}" Style="{StaticResource TabToggleButton}" Padding="10,6" Margin="0,0,8,0" ToolTip="화면에서 배경색 직접 스포이트 추출">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🔍 스포이트 색상 추출" FontSize="12" />
                                 </StackPanel>

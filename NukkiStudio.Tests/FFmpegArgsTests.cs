@@ -62,4 +62,13 @@ public class FFmpegArgsTests
         Assert.Contains("-pix_fmt yuv420p", args);
         Assert.Contains("output.mp4", args);
     }
+
+    [Fact]
+    public void DetectFFmpeg_FindsValidWorkingFFmpegWithoutError()
+    {
+        var service = new FFmpegService();
+        Assert.True(service.IsFFmpegInstalled);
+        Assert.EndsWith("ffmpeg.exe", service.FFmpegPath, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".mise-bins", service.FFmpegPath, System.StringComparison.OrdinalIgnoreCase);
+    }
 }

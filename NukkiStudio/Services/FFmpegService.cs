@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,13 +14,58 @@ namespace NukkiStudio.Services;
 
 public class FFmpegService
 {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint SetErrorMode(uint uMode);
+    private const uint SEM_FAILCRITICALERRORS = 0x0001;
+    private const uint SEM_NOGPFAULTERRORBOX = 0x0002;
+
     public string FFmpegPath { get; private set; } = "ffmpeg.exe";
     public string FFprobePath { get; private set; } = "ffprobe.exe";
     public bool IsFFmpegInstalled { get; private set; }
 
+    static FFmpegService()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                // Suppress Windows system modal error dialogs when probing binaries with missing dynamic libraries
+                SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+            }
+        }
+        catch { }
+    }
+
     public FFmpegService()
     {
         DetectFFmpeg();
+    }
+
+    public static ProcessStartInfo CreateProcessStartInfo(string binaryPath, string arguments)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = binaryPath,
+            Arguments = arguments,
+            CreateNoWindow = true,
+            UseShellExecute = false,
+            ErrorDialog = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        var dir = Path.GetDirectoryName(binaryPath);
+        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+        {
+            psi.WorkingDirectory = dir;
+            var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+            if (!currentPath.Contains(dir, StringComparison.OrdinalIgnoreCase))
+            {
+                psi.Environment["PATH"] = dir + ";" + currentPath;
+            }
+        }
+
+        return psi;
     }
 
     public void SetCustomPaths(string ffmpegPath, string? ffprobePath = null)
@@ -33,38 +80,60 @@ public class FFmpegService
 
     public void DetectFFmpeg()
     {
-        // 1. Check if on system PATH
-        if (CheckBinaryAvailable("ffmpeg.exe"))
+        // 1. Check App directory / local tools first
+        var appDir = AppDomain.CurrentDomain.BaseDirectory;
+        var localFFmpeg = Path.Combine(appDir, "ffmpeg.exe");
+        if (File.Exists(localFFmpeg) && CheckBinaryAvailable(localFFmpeg))
         {
-            FFmpegPath = "ffmpeg.exe";
-            FFprobePath = "ffprobe.exe";
+            FFmpegPath = localFFmpeg;
+            var localProbe = Path.Combine(appDir, "ffprobe.exe");
+            FFprobePath = File.Exists(localProbe) ? localProbe : "ffprobe.exe";
             IsFFmpegInstalled = true;
             return;
         }
 
-        // 2. Check mise / local installations
+        // 2. Check mise / local installations with DLL directory prioritization
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var miseInstalls = Path.Combine(userProfile, "AppData", "Local", "mise", "installs", "ffmpeg");
         if (Directory.Exists(miseInstalls))
         {
-            var bins = Directory.GetFiles(miseInstalls, "ffmpeg.exe", SearchOption.AllDirectories);
-            if (bins.Length > 0)
+            var allCandidates = Directory.GetFiles(miseInstalls, "ffmpeg.exe", SearchOption.AllDirectories);
+            // Prioritize directories containing Library\bin or bin where DLLs live, avoiding .mise-bins shims
+            var sortedCandidates = allCandidates
+                .OrderByDescending(b => b.Contains("Library\\bin", StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(b => b.Contains("\\bin\\", StringComparison.OrdinalIgnoreCase))
+                .ThenBy(b => b.Contains(".mise-bins", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var candidate in sortedCandidates)
             {
-                FFmpegPath = bins[0];
-                var probeBins = Directory.GetFiles(miseInstalls, "ffprobe.exe", SearchOption.AllDirectories);
-                FFprobePath = probeBins.Length > 0 ? probeBins[0] : "ffprobe.exe";
-                IsFFmpegInstalled = true;
-                return;
+                if (CheckBinaryAvailable(candidate))
+                {
+                    FFmpegPath = candidate;
+                    var candDir = Path.GetDirectoryName(candidate)!;
+                    var probeInSameDir = Path.Combine(candDir, "ffprobe.exe");
+                    if (File.Exists(probeInSameDir))
+                    {
+                        FFprobePath = probeInSameDir;
+                    }
+                    else
+                    {
+                        var probeBins = Directory.GetFiles(miseInstalls, "ffprobe.exe", SearchOption.AllDirectories)
+                            .OrderByDescending(b => b.Contains("Library\\bin", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        FFprobePath = probeBins.Count > 0 ? probeBins[0] : "ffprobe.exe";
+                    }
+                    IsFFmpegInstalled = true;
+                    return;
+                }
             }
         }
 
-        // 3. Check App directory / local tools
-        var appDir = AppDomain.CurrentDomain.BaseDirectory;
-        var localFFmpeg = Path.Combine(appDir, "ffmpeg.exe");
-        if (File.Exists(localFFmpeg))
+        // 3. Check if on system PATH
+        if (CheckBinaryAvailable("ffmpeg.exe"))
         {
-            FFmpegPath = localFFmpeg;
-            FFprobePath = Path.Combine(appDir, "ffprobe.exe");
+            FFmpegPath = "ffmpeg.exe";
+            FFprobePath = "ffprobe.exe";
             IsFFmpegInstalled = true;
             return;
         }
@@ -76,20 +145,10 @@ public class FFmpegService
     {
         try
         {
-            using var proc = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = binaryName,
-                    Arguments = "-version",
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                }
-            };
+            var psi = CreateProcessStartInfo(binaryName, "-version");
+            using var proc = new Process { StartInfo = psi };
             proc.Start();
-            proc.WaitForExit(1500);
+            proc.WaitForExit(2000);
             return proc.ExitCode == 0;
         }
         catch
@@ -116,15 +175,7 @@ public class FFmpegService
 
         using var proc = new Process
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = FFprobePath,
-                Arguments = args,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
+            StartInfo = CreateProcessStartInfo(FFprobePath, args)
         };
 
         proc.Start();
@@ -178,15 +229,7 @@ public class FFmpegService
         var audioArgs = $"-v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1 \"{videoPath}\"";
         using var aProc = new Process
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = FFprobePath,
-                Arguments = audioArgs,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
+            StartInfo = CreateProcessStartInfo(FFprobePath, audioArgs)
         };
         aProc.Start();
         string aOut = await aProc.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -205,15 +248,7 @@ public class FFmpegService
 
         using var proc = new Process
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = FFmpegPath,
-                Arguments = args,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
+            StartInfo = CreateProcessStartInfo(FFmpegPath, args)
         };
 
         proc.Start();
@@ -319,18 +354,8 @@ public class FFmpegService
 
         // 1. Decoder process: streams raw RGBA frames to stdout
         var decoderArgs = $"-i \"{inputVideoPath}\" -f rawvideo -pix_fmt rgba -";
-        using var decoder = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = FFmpegPath,
-                Arguments = decoderArgs,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
-        };
+        var decoderPsi = CreateProcessStartInfo(FFmpegPath, decoderArgs);
+        using var decoder = new Process { StartInfo = decoderPsi };
 
         // 2. Encoder process: receives processed RGBA frames via stdin
         var encoderArgs = BuildEncoderArguments(
@@ -349,18 +374,9 @@ public class FFmpegService
             Directory.CreateDirectory(outputPath);
         }
 
-        using var encoder = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = FFmpegPath,
-                Arguments = encoderArgs,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardError = true
-            }
-        };
+        var encoderPsi = CreateProcessStartInfo(FFmpegPath, encoderArgs);
+        encoderPsi.RedirectStandardInput = true;
+        using var encoder = new Process { StartInfo = encoderPsi };
 
         decoder.Start();
         encoder.Start();
@@ -415,9 +431,7 @@ public class FFmpegService
                 BitmapSource? preview = null;
                 if (frameIndex % 15 == 0 || frameIndex == 1)
                 {
-                    // Copy bytes for preview
                     var previewBytes = (byte[])frameBuffer.Clone();
-                    // WPF uses BGRA, swap red and blue for preview
                     ImageProcessor.SwapRedBlue(previewBytes, width, height);
                     preview = ImageProcessor.CreateBitmapFromPixels(previewBytes, width, height);
                 }
