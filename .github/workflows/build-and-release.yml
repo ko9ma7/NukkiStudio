@@ -1,0 +1,88 @@
+name: Build, Test & Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore NukkiStudio.sln
+
+    - name: Build solution
+      run: dotnet build NukkiStudio.sln --configuration Release --no-restore
+
+    - name: Run Unit Tests
+      run: dotnet test NukkiStudio.sln --configuration Release --no-build --verbosity normal
+
+    - name: Publish Windows x64 Application
+      run: >
+        dotnet publish NukkiStudio/NukkiStudio.csproj
+        -c Release
+        -r win-x64
+        --self-contained true
+        -p:PublishSingleFile=true
+        -p:IncludeNativeLibrariesForSelfExtract=true
+        -o ./publish
+
+    - name: Create ZIP Archive
+      shell: pwsh
+      run: |
+        Compress-Archive -Path ./publish/* -DestinationPath ./NukkiStudio-win-x64.zip
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: NukkiStudio-win-x64
+        path: ./NukkiStudio-win-x64.zip
+
+    - name: Create GitHub Release on Tag
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ./NukkiStudio-win-x64.zip
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-pages:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v5
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './web-preview'
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4

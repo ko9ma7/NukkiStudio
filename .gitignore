@@ -1,0 +1,43 @@
+## Build and Output Folders
+bin/
+obj/
+out/
+build/
+
+## Visual Studio & Rider
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.docstates
+
+## Temporary & Logs
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+## Model Files (large binary weights - downloaded on demand)
+*.onnx
+*.onnx.tmp
+Models/*.onnx
+!NukkiStudio/Assets/*.ico
+!NukkiStudio/Assets/*.png
+
+## Export outputs
+NukkiStudio_Export/
+*_nukki.*
+*_frames/
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.assets.json

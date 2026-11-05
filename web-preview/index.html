@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nukki Studio - 영상 &amp; 이미지 AI 누끼 제거 전문 스튜디오 (WPF / C#)</title>
+  <meta name="description" content="C# .NET 8 WPF 기반 고성능 영상 및 이미지 배경 제거(누끼) 스튜디오. 크로마키, AI 신경망(ONNX), Apple ProRes 4444 및 WebM 투명 비디오 내보내기 지원.">
+  <meta name="keywords" content="영상 누끼, 이미지 배경 제거, 크로마키, C#, WPF, ONNX Runtime, FFmpeg, ProRes 4444, WebM VP9">
+  <meta name="theme-color" content="#4F46E5">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Nukki Studio - 영상 &amp; 이미지 AI 누끼 제거 전문 스튜디오">
+  <meta property="og:description" content="C# .NET 8 WPF 기반 고성능 영상 및 이미지 배경 제거 스튜디오. 실시간 분할 비교, 크로마키, ONNX AI 신경망, 투명 ProRes/WebM 지원.">
+  <meta property="og:image" content="icon-512.png">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Nukki Studio - AI Video &amp; Image Matting Studio">
+  <meta name="twitter:description" content="High performance background removal for video &amp; images in C# WPF.">
+  <meta name="twitter:image" content="icon-512.png">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="icon-512.png">
+  <link rel="manifest" href="site.webmanifest">
+
+  <style>
+    :root {
+      --bg: #0F172A;
+      --card-bg: #1E293B;
+      --border: #334155;
+      --primary: #4F46E5;
+      --primary-hover: #4338CA;
+      --accent: #38BDF8;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      padding: 3rem 1.5rem;
+      text-align: center;
+      background: radial-gradient(circle at top, #1E1B4B 0%, var(--bg) 70%);
+      border-bottom: 1px solid var(--border);
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      background: rgba(79, 70, 229, 0.2);
+      border: 1px solid var(--primary);
+      border-radius: 9999px;
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 2.75rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #FFF 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      max-width: 680px;
+      margin: 0 auto 2rem;
+      font-size: 1.15rem;
+      color: var(--muted);
+    }
+    .btn-group {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 0.85rem 1.75rem;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      transition: border-color 0.2s;
+    }
+    .card:hover {
+      border-color: var(--accent);
+    }
+    .card-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+    .card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: #FFF;
+    }
+    .card p {
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    .preview-section {
+      background: #090D16;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-top: 3rem;
+      text-align: center;
+    }
+    .code-block {
+      background: #090D16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: Consolas, monospace;
+      font-size: 0.9rem;
+      color: #38BDF8;
+      overflow-x: auto;
+      text-align: left;
+      margin: 1.5rem 0;
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem 1.5rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="badge">🚀 C# .NET 8 WPF Desktop Studio</div>
+    <h1>Nukki Studio</h1>
+    <p class="subtitle">영상(Video)과 이미지(Image) 모두를 위한 프로페셔널 AI 배경 제거 &amp; 크로마키 스튜디오</p>
+    <div class="btn-group">
+      <a href="https://github.com" class="btn btn-primary">📁 GitHub 저장소 보기</a>
+      <a href="#features" class="btn btn-secondary">⚡ 주요 기능 둘러보기</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="preview-section">
+      <h2 style="font-size: 1.75rem; margin-bottom: 0.5rem;">프로페셔널 크리에이티브 파이프라인</h2>
+      <p style="color: var(--muted); margin-bottom: 1.5rem;">드래그 앤 드롭으로 파일 추가부터 실시간 전후 분할 비교, 고해상도 ProRes 4444 투명 비디오 내보내기까지</p>
+      
+      <div class="code-block">
+# 원클릭 설치 및 실행 (Windows PowerShell / CMD)
+.\github-bootstrap.cmd
+      </div>
+    </div>
+
+    <section id="features" style="margin-top: 4rem;">
+      <h2 style="font-size: 2rem; text-align: center;">주요 핵심 기술 (Key Architecture)</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="card-icon">🎬</div>
+          <h3>영상 &amp; 이미지 완전 지원</h3>
+          <p>MP4, MOV, WebM, MKV 등 모든 비디오 포맷과 PNG, JPG, WebP 이미지를 완벽하게 처리합니다.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🟩</div>
+          <h3>초고속 크로마키 (Color Keying)</h3>
+          <p>녹색/청색 스크린뿐 아니라 스포이트로 원하는 배경색을 클릭 한 번으로 추출하고 오차 허용도, 부드러움, 반사광 억제(Spill)를 미세 조절합니다.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🧠</div>
+          <h3>ONNX Runtime AI 딥러닝</h3>
+          <p>BRIA RMBG-1.4, MODNet, U2Net 등 최신 모델을 C# 네이티브 ONNX Runtime으로 구동하여 Python 환경 없이 순수 로컬에서 구동됩니다.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎞️</div>
+          <h3>ProRes 4444 &amp; WebM 투명 비디오</h3>
+          <p>Premiere Pro, DaVinci Resolve, Final Cut Pro에서 즉시 쓸 수 있는 알파 채널 포함 Apple ProRes 4444 (.mov) 및 WebM (.webm)을 생성합니다.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3>스트리밍 인메모리 비디오 파이프라인</h3>
+          <p>디스크에 수만 장의 임시 프레임을 쓰지 않고, FFmpeg rawvideo 파이프를 통해 메모리 상에서 실시간으로 누끼를 따고 바로 압축 인코딩합니다.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎨</div>
+          <h3>배경 교체 및 실시간 분할 비교</h3>
+          <p>투명 배경(Alpha), 그린스크린(#00FF00), 단색 컬러, 사용자 커스텀 이미지 합성을 실시간 슬라이더로 원본과 대조하며 확인합니다.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 NukkiStudio. MIT License. Built with C# .NET 8, WPF, ONNX Runtime &amp; FFmpeg.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="NukkiStudio.Tests/NukkiStudio.Tests.csproj" />
+  <Project Path="NukkiStudio/NukkiStudio.csproj" />
+</Solution>

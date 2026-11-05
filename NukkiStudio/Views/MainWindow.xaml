@@ -1,0 +1,544 @@
+<Window x:Class="NukkiStudio.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:NukkiStudio.ViewModels"
+        xmlns:m="clr-namespace:NukkiStudio.Models"
+        xmlns:conv="clr-namespace:NukkiStudio.Converters"
+        mc:Ignorable="d"
+        Title="Nukki Studio - 영상 &amp; 이미지 AI 누끼 제거 스튜디오"
+        Height="820" Width="1360"
+        MinHeight="680" MinWidth="1020"
+        WindowStartupLocation="CenterScreen"
+        Background="#0F172A"
+        Foreground="#F8FAFC"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver">
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <conv:InverseBooleanConverter x:Key="InverseBool" />
+        <conv:StatusToColorConverter x:Key="StatusToColor" />
+        <conv:EnumToBooleanConverter x:Key="EnumToBool" />
+        <conv:EnumToVisibilityConverter x:Key="EnumToVis" />
+        <conv:ColorToBrushConverter x:Key="ColorToBrush" />
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+
+        <!-- Checkerboard DrawingBrush for Transparency Grid -->
+        <DrawingBrush x:Key="CheckerboardBrush" Viewport="0,0,24,24" ViewportUnits="Absolute" TileMode="Tile">
+            <DrawingBrush.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="#1E293B">
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,24,24" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#334155">
+                        <GeometryDrawing.Geometry>
+                            <GeometryGroup>
+                                <RectangleGeometry Rect="0,0,12,12" />
+                                <RectangleGeometry Rect="12,12,12,12" />
+                            </GeometryGroup>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                </DrawingGroup>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI, Malgun Gothic, sans-serif" />
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#4F46E5" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4338CA" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#334155" />
+                                <Setter Property="Foreground" Value="#94A3B8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="Foreground" Value="#F1F5F9" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="BorderBrush" Value="#334155" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#334155" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#0F172A" />
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TabRadioButton" TargetType="RadioButton">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="Foreground" Value="#94A3B8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4F46E5" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 1. Header Bar -->
+        <Border Grid.Row="0" Background="#1E293B" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="20,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Brand Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="36" Height="36" CornerRadius="8" Background="#4F46E5" Margin="0,0,12,0">
+                        <Image Source="/Assets/app-icon.ico" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Nukki Studio" FontSize="18" FontWeight="Bold" Foreground="White" />
+                            <Border Background="#6366F1" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="PRO v1.0" FontSize="10" FontWeight="Bold" Foreground="White" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="영상 &amp; 이미지 AI 배경 제거 · 크로마키 스튜디오" FontSize="11" Foreground="#94A3B8" Margin="0,2,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- FFmpeg & Engine Status Badge -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="16" Padding="12,6">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                                     Fill="{Binding IsFFmpegAvailable, Converter={StaticResource StatusToColor}}" />
+                            <TextBlock Text="{Binding FFmpegStatusText}" FontSize="12" Foreground="#CBD5E1" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Output Folder Selection -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="저장 경로:" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Border Background="#0F172A" CornerRadius="6" BorderBrush="#334155" BorderThickness="1" Padding="8,5" MaxWidth="260">
+                        <TextBlock Text="{Binding OutputDirectory}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#E2E8F0" ToolTip="{Binding OutputDirectory}" />
+                    </Border>
+                    <Button Content="변경" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0" Padding="8,4" Command="{Binding SelectOutputFolderCommand}" />
+                    <Button Content="📁 열기" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0" Padding="8,4" Command="{Binding OpenOutputFolderCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 2. Main Content Grid -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" MinWidth="260" MaxWidth="440" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="400" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="360" MinWidth="300" MaxWidth="480" />
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT PANEL: Batch Queue -->
+            <Border Grid.Column="0" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="0,0,1,0" Padding="14">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Queue Action Buttons -->
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="+ 파일 추가 (Add Files)" Style="{StaticResource PrimaryButton}" Command="{Binding AddFilesCommand}" Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="비우기" Style="{StaticResource SecondaryButton}" Command="{Binding ClearQueueCommand}" ToolTip="대기열 비우기" />
+                    </Grid>
+
+                    <!-- Drag & Drop Zone Hint -->
+                    <Border Grid.Row="1" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="12,14" Margin="0,0,0,12" ToolTip="파일을 이 곳으로 끌어다 놓으세요">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="📥 드래그 &amp; 드롭으로 추가" FontSize="13" FontWeight="SemiBold" Foreground="#38BDF8" HorizontalAlignment="Center" />
+                            <TextBlock Text="MP4, MOV, WEBM, PNG, JPG 지원" FontSize="11" Foreground="#64748B" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Queue List -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Queue}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type m:MediaItem}">
+                                    <Border Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Margin="0,0,0,8" Padding="10" Cursor="Hand" MouseLeftButtonUp="QueueItem_MouseLeftButtonUp">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="54" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Thumbnail -->
+                                            <Border Grid.Column="0" Width="48" Height="48" CornerRadius="6" Background="#0F172A" ClipToBounds="True">
+                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                            </Border>
+
+                                            <!-- Info -->
+                                            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12" Foreground="White" TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
+                                                    <Border Background="#334155" CornerRadius="3" Padding="4,1" Margin="0,0,6,0">
+                                                        <TextBlock Text="{Binding Type}" FontSize="9" FontWeight="Bold" Foreground="#38BDF8" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding FormattedFileSize}" FontSize="11" Foreground="#94A3B8" />
+                                                </StackPanel>
+                                                <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Height="4" Maximum="100" Background="#0F172A" Foreground="#38BDF8" BorderThickness="0" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding StatusMessage}" FontSize="10" Foreground="{Binding Status, Converter={StaticResource StatusToColor}}" Margin="0,2,0,0" />
+                                            </StackPanel>
+
+                                            <!-- Remove Item Button -->
+                                            <Button Grid.Column="2" Content="✕" Width="24" Height="24" Background="Transparent" Foreground="#64748B" BorderThickness="0" Cursor="Hand"
+                                                    Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" ToolTip="항목 제거" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Splitter 1 -->
+            <GridSplitter Grid.Column="1" Width="2" HorizontalAlignment="Center" Background="#1E293B" ShowsPreview="False" />
+
+            <!-- CENTER PANEL: Interactive Canvas & Comparison View -->
+            <Border Grid.Column="2" Background="#090D16" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Preview Mode / Controls -->
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="실시간 미리보기 (Live Preview)" FontSize="14" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                            <Border Background="#334155" CornerRadius="4" Padding="6,2" Margin="10,0,0,0">
+                                <TextBlock Text="좌측: 원본 | 우측: 누끼 결과" FontSize="11" Foreground="#94A3B8" />
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <ToggleButton IsChecked="{Binding IsColorPickerActive}" Style="{StaticResource TabRadioButton}" Padding="10,6" Margin="0,0,8,0" ToolTip="화면에서 배경색 직접 스포이트 추출">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔍 스포이트 색상 추출" FontSize="12" />
+                                </StackPanel>
+                            </ToggleButton>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Main Preview Display -->
+                    <Border Grid.Row="1" Background="{StaticResource CheckerboardBrush}" CornerRadius="10" BorderBrush="#334155" BorderThickness="1" ClipToBounds="True">
+                        <Grid x:Name="PreviewContainer" SizeChanged="PreviewContainer_SizeChanged">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding OriginalPreviewImage, Converter={StaticResource NullToVis}, ConverterParameter=invert}">
+                                <TextBlock Text="🖼️ 미리보기할 미디어를 선택하거나 추가하세요" FontSize="15" FontWeight="SemiBold" Foreground="#64748B" HorizontalAlignment="Center" />
+                                <TextBlock Text="왼쪽 대기열에 파일을 추가하면 실시간 누끼 미리보기가 표시됩니다." FontSize="12" Foreground="#475569" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                            </StackPanel>
+
+                            <!-- Processed Image (Right Layer / Background) -->
+                            <Image Source="{Binding ProcessedPreviewImage}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                            <!-- Original Image (Left Layer / Clipped by Split Position) -->
+                            <Image x:Name="OriginalPreviewElement"
+                                   Source="{Binding OriginalPreviewImage}"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   MouseLeftButtonDown="OriginalPreview_MouseLeftButtonDown">
+                                <Image.Style>
+                                    <Style TargetType="Image">
+                                        <Setter Property="Cursor" Value="Arrow" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsColorPickerActive}" Value="True">
+                                                <Setter Property="Cursor" Value="Cross" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Image.Style>
+                                <Image.Clip>
+                                    <RectangleGeometry x:Name="SplitClipGeometry" />
+                                </Image.Clip>
+                            </Image>
+
+                            <!-- Vertical Split Separator Line -->
+                            <Canvas x:Name="SplitLineCanvas" IsHitTestVisible="False">
+                                <Line x:Name="SplitDividerLine" Stroke="#38BDF8" StrokeThickness="2" />
+                            </Canvas>
+                        </Grid>
+                    </Border>
+
+                    <!-- Split Position Slider -->
+                    <Grid Grid.Row="2" Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="원본 (Original)" FontSize="11" Foreground="#94A3B8" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <Slider Grid.Column="1" Value="{Binding SplitPosition}" Minimum="0" Maximum="100" VerticalAlignment="Center" ValueChanged="SplitSlider_ValueChanged" />
+                        <TextBlock Grid.Column="2" Text="누끼 (Matte)" FontSize="11" Foreground="#94A3B8" Margin="10,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- Splitter 2 -->
+            <GridSplitter Grid.Column="3" Width="2" HorizontalAlignment="Center" Background="#1E293B" ShowsPreview="False" />
+
+            <!-- RIGHT PANEL: Inspector & Export Settings -->
+            <Border Grid.Column="4" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1,0,0,0" Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="누끼 및 내보내기 설정" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,16" />
+
+                        <!-- 1. Matting Engine Mode Selection -->
+                        <TextBlock Text="1. 누끼 엔진 방식" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <RadioButton Grid.Column="0" Content="🟩 크로마키 (컬러)" Style="{StaticResource TabRadioButton}" Margin="0,0,4,0"
+                                         IsChecked="{Binding SelectedMode, Converter={StaticResource EnumToBool}, ConverterParameter=ChromaKey}" />
+                            <RadioButton Grid.Column="1" Content="🧠 AI 신경망 (ONNX)" Style="{StaticResource TabRadioButton}" Margin="4,0,0,0"
+                                         IsChecked="{Binding SelectedMode, Converter={StaticResource EnumToBool}, ConverterParameter=AiNeural}" />
+                        </Grid>
+
+                        <!-- ChromaKey Controls -->
+                        <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16"
+                                Visibility="{Binding SelectedMode, Converter={StaticResource EnumToVis}, ConverterParameter=ChromaKey}">
+                            <StackPanel>
+                                <TextBlock Text="크로마키 상세 조절" FontSize="13" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,12" />
+
+                                <TextBlock Text="추출할 배경색 (Key Color)" FontSize="11" Foreground="#CBD5E1" Margin="0,0,0,4" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="36" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Height="28" CornerRadius="6" BorderBrush="#475569" BorderThickness="1"
+                                            Background="{Binding KeyColor, Converter={StaticResource ColorToBrush}}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                                        <Button Content="녹색" Style="{StaticResource SecondaryButton}" Padding="6,2" Margin="0,0,4,0" Click="GreenPreset_Click" />
+                                        <Button Content="청색" Style="{StaticResource SecondaryButton}" Padding="6,2" Margin="0,0,4,0" Click="BluePreset_Click" />
+                                        <Button Content="흰색" Style="{StaticResource SecondaryButton}" Padding="6,2" Click="WhitePreset_Click" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Tolerance Slider -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="색상 허용 오차 (Tolerance)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Tolerance, StringFormat={}{0:F2}}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <Slider Value="{Binding Tolerance}" Minimum="0.01" Maximum="0.80" SmallChange="0.01" LargeChange="0.05" Margin="0,0,0,12" />
+
+                                <!-- Smoothness Slider -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="경계면 부드러움 (Smoothness)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Smoothness, StringFormat={}{0:F2}}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <Slider Value="{Binding Smoothness}" Minimum="0.01" Maximum="0.40" SmallChange="0.01" LargeChange="0.05" Margin="0,0,0,12" />
+
+                                <!-- Spill Suppression Slider -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="배경색 반사 억제 (Spill Removal)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding SpillSuppression, StringFormat={}{0:F2}}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <Slider Value="{Binding SpillSuppression}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- AI Neural Controls -->
+                        <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16"
+                                Visibility="{Binding SelectedMode, Converter={StaticResource EnumToVis}, ConverterParameter=AiNeural}">
+                            <StackPanel>
+                                <TextBlock Text="AI 신경망 모델 관리" FontSize="13" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,10" />
+
+                                <TextBlock Text="사전 설정 AI 모델" FontSize="11" Foreground="#CBD5E1" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding ModelPresets}" SelectedItem="{Binding SelectedModelPreset}" DisplayMemberPath="Name" Margin="0,0,0,8" />
+
+                                <TextBlock Text="{Binding SelectedModelPreset.Description}" FontSize="10" Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                <Button Content="📥 선택 모델 다운로드 &amp; 적용" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"
+                                        Command="{Binding DownloadSelectedPresetModelCommand}"
+                                        IsEnabled="{Binding IsModelDownloading, Converter={StaticResource InverseBool}}" />
+
+                                <ProgressBar Value="{Binding ModelDownloadProgress}" Height="6" Maximum="100" Margin="0,0,0,10"
+                                             Visibility="{Binding IsModelDownloading, Converter={StaticResource BoolToVis}}" />
+
+                                <Button Content="📂 내 PC의 .ONNX 파일 열기" Style="{StaticResource SecondaryButton}" Command="{Binding SelectCustomOnnxModelCommand}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 2. Background Replacement Selection -->
+                        <TextBlock Text="2. 배경 교체 및 합성 (Background)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16">
+                            <StackPanel>
+                                <RadioButton Content="투명 배경 (Transparent Alpha)" Style="{StaticResource TabRadioButton}" Margin="0,0,0,6"
+                                             IsChecked="{Binding SelectedBgType, Converter={StaticResource EnumToBool}, ConverterParameter=Transparent}" />
+                                <RadioButton Content="그린스크린 (#00FF00 Chroma Green)" Style="{StaticResource TabRadioButton}" Margin="0,0,0,6"
+                                             IsChecked="{Binding SelectedBgType, Converter={StaticResource EnumToBool}, ConverterParameter=GreenScreen}" />
+                                <RadioButton Content="단색 컬러 채우기 (Custom Color)" Style="{StaticResource TabRadioButton}" Margin="0,0,0,6"
+                                             IsChecked="{Binding SelectedBgType, Converter={StaticResource EnumToBool}, ConverterParameter=CustomColor}" />
+                                <RadioButton Content="사용자 이미지 합성 (Custom Image)" Style="{StaticResource TabRadioButton}"
+                                             IsChecked="{Binding SelectedBgType, Converter={StaticResource EnumToBool}, ConverterParameter=CustomImage}" />
+
+                                <Button Content="🖼️ 배경 이미지 선택..." Style="{StaticResource SecondaryButton}" Margin="0,8,0,0"
+                                        Command="{Binding SelectCustomBgImageCommand}"
+                                        Visibility="{Binding SelectedBgType, Converter={StaticResource EnumToVis}, ConverterParameter=CustomImage}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 3. Export Formats -->
+                        <TextBlock Text="3. 내보내기 포맷 (Export Format)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,20">
+                            <StackPanel>
+                                <TextBlock Text="비디오 내보내기 포맷" FontSize="11" Foreground="#CBD5E1" Margin="0,0,0,4" />
+                                <ComboBox SelectedValue="{Binding SelectedVideoFormat}" Margin="0,0,0,10">
+                                    <m:VideoExportFormat>ProRes4444_Mov</m:VideoExportFormat>
+                                    <m:VideoExportFormat>WebM_VP9</m:VideoExportFormat>
+                                    <m:VideoExportFormat>GreenScreen_Mp4</m:VideoExportFormat>
+                                    <m:VideoExportFormat>CustomBg_Mp4</m:VideoExportFormat>
+                                    <m:VideoExportFormat>AlphaMask_Mp4</m:VideoExportFormat>
+                                    <m:VideoExportFormat>PngSequence</m:VideoExportFormat>
+                                </ComboBox>
+
+                                <TextBlock Text="이미지 내보내기 포맷" FontSize="11" Foreground="#CBD5E1" Margin="0,0,0,4" />
+                                <ComboBox SelectedValue="{Binding SelectedImageFormat}" Margin="0,0,0,12">
+                                    <m:ImageExportFormat>PngTransparent</m:ImageExportFormat>
+                                    <m:ImageExportFormat>WebpTransparent</m:ImageExportFormat>
+                                    <m:ImageExportFormat>JpgComposite</m:ImageExportFormat>
+                                    <m:ImageExportFormat>AlphaMaskPng</m:ImageExportFormat>
+                                </ComboBox>
+
+                                <CheckBox Content="원본 비디오 오디오 보존 (Keep Audio)" IsChecked="{Binding PreserveAudio}" Foreground="#CBD5E1" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 4. Execute Batch Button -->
+                        <Button Content="🚀 일괄 누끼 따기 시작 (Start Batch)" Style="{StaticResource PrimaryButton}" Height="48" FontSize="15"
+                                Command="{Binding StartProcessingCommand}"
+                                IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBool}}" Margin="0,0,0,8" />
+
+                        <Button Content="취소 (Cancel)" Style="{StaticResource SecondaryButton}" Height="36"
+                                Command="{Binding CancelProcessingCommand}"
+                                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <!-- 3. Bottom Status Bar -->
+        <Border Grid.Row="2" Background="#1E293B" BorderBrush="#334155" BorderThickness="0,1,0,0" Padding="20,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#CBD5E1" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ProgressBar Value="{Binding OverallProgress}" Width="200" Height="8" Maximum="100" Margin="0,0,12,0"
+                                 Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}" Background="#0F172A" Foreground="#4F46E5" />
+                    <TextBlock Text="{Binding OverallProgress, StringFormat={}{0:F0}%}" FontSize="12" FontWeight="Bold" Foreground="#38BDF8"
+                               Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
