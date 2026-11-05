@@ -174,7 +174,7 @@ if %ERRORLEVEL% neq 0 (
 :: ----------------------------------------------------------------------------
 echo.
 echo [META] GitHub Repository 설정 및 토픽 적용 중...
-gh repo edit %REPO_NAME% --description "%REPO_DESC%" --add-topic "%REPO_TOPICS%" 2>nul
+gh repo edit --description "%REPO_DESC%" --add-topic "%REPO_TOPICS%" 2>nul
 echo [OK] Repository Description 및 Topics 적용 완료.
 
 :: ----------------------------------------------------------------------------
