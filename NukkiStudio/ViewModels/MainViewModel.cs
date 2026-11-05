@@ -28,7 +28,7 @@ public partial class MainViewModel : ObservableObject
 
     // Active Settings Bindings
     [ObservableProperty]
-    private MattingMode _selectedMode = MattingMode.ChromaKey;
+    private MattingMode _selectedMode = MattingMode.AiNeural; // Default to AI Neural Matting!
 
     [ObservableProperty]
     private BackgroundType _selectedBgType = BackgroundType.Transparent;
@@ -149,6 +149,21 @@ public partial class MainViewModel : ObservableObject
         }
         SelectedModelPreset = ModelPresets.FirstOrDefault();
 
+        // Auto-load built-in AI model on startup
+        if (File.Exists(ModelManager.BuiltInModelPath))
+        {
+            try
+            {
+                _onnxEngine.LoadModel(ModelManager.BuiltInModelPath, useGpu: true);
+                CustomOnnxPath = ModelManager.BuiltInModelPath;
+                StatusMessage = "AI 엔진 기본 탑재 완료 (별도 설정 없이 자동 누끼 동작)";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to load built-in model: {ex.Message}");
+            }
+        }
+
         CheckFFmpegStatus();
     }
 
@@ -258,7 +273,44 @@ public partial class MainViewModel : ObservableObject
     private void LoadPreviewForItem(MediaItem item)
     {
         OriginalPreviewImage = item.OriginalPreview;
+        if (item.OriginalPreview != null)
+        {
+            AutoDetectBackgroundColor(item.OriginalPreview);
+        }
         UpdateLivePreview();
+    }
+
+    private void AutoDetectBackgroundColor(BitmapSource bmp)
+    {
+        try
+        {
+            int w = bmp.PixelWidth;
+            int h = bmp.PixelHeight;
+            if (w < 2 || h < 2) return;
+
+            // Sample 4 outer corners to automatically identify background color
+            var rects = new[]
+            {
+                new Int32Rect(0, 0, 1, 1),
+                new Int32Rect(w - 1, 0, 1, 1),
+                new Int32Rect(0, h - 1, 1, 1),
+                new Int32Rect(w - 1, h - 1, 1, 1)
+            };
+
+            int totalB = 0, totalG = 0, totalR = 0;
+            byte[] pixel = new byte[4];
+            foreach (var rect in rects)
+            {
+                var cropped = new CroppedBitmap(bmp, rect);
+                cropped.CopyPixels(pixel, 4, 0);
+                totalB += pixel[0];
+                totalG += pixel[1];
+                totalR += pixel[2];
+            }
+
+            KeyColor = Color.FromRgb((byte)(totalR / 4), (byte)(totalG / 4), (byte)(totalB / 4));
+        }
+        catch { }
     }
 
     public void UpdateLivePreview()

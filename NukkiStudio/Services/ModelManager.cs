@@ -24,31 +24,46 @@ public class ModelManager
         "Models"
     );
 
+    public static string BuiltInModelPath
+    {
+        get
+        {
+            var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var localPath = Path.Combine(appDir, "Assets", "Models", "u2netp.onnx");
+            if (File.Exists(localPath)) return localPath;
+
+            var devPath = Path.Combine(appDir, "..", "..", "..", "Assets", "Models", "u2netp.onnx");
+            if (File.Exists(devPath)) return Path.GetFullPath(devPath);
+
+            return localPath;
+        }
+    }
+
     public static readonly List<AiModelInfo> Presets = new()
     {
         new AiModelInfo(
-            Id: "modnet_photographic",
-            Name: "MODNet (Real-time Human/Portrait Matting)",
-            Description: "Fast portrait video matting optimized for people and webcams (512x512).",
-            DefaultResolution: 512,
-            DownloadUrl: "https://github.com/actonet/MODNet/releases/download/v0.1/modnet_photographic_portrait_matting.onnx",
-            ApproximateSizeBytes: 26_000_000
-        ),
-        new AiModelInfo(
             Id: "u2netp",
-            Name: "U2Net-P (Lightweight General Matting)",
-            Description: "Super lightweight general salient object & background removal (320x320, ~4MB).",
+            Name: "U2Net-P (기본 내장 · 초고속 자동 AI)",
+            Description: "앱에 기본 내장되어 별도 설치 없이 즉시 동작하는 초경량 사물/인물 AI 누끼 모델.",
             DefaultResolution: 320,
             DownloadUrl: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx",
             ApproximateSizeBytes: 4_700_000
         ),
         new AiModelInfo(
             Id: "bria_rmbg_1_4",
-            Name: "BRIA RMBG-1.4 (High Precision General)",
-            Description: "State-of-the-art general background removal for products, animals, and people (1024x1024).",
+            Name: "BRIA RMBG-1.4 (고정밀 스튜디오 스펙)",
+            Description: "복잡한 제품, 털, 머리카락까지 정밀하게 따내는 1024x1024 고해상도 AI 모델.",
             DefaultResolution: 1024,
             DownloadUrl: "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model.onnx",
             ApproximateSizeBytes: 176_000_000
+        ),
+        new AiModelInfo(
+            Id: "modnet_photographic",
+            Name: "MODNet (인물 영상 전문)",
+            Description: "실시간 웹캠/인물 비디오에 최적화된 포트레이트 매팅 모델 (512x512).",
+            DefaultResolution: 512,
+            DownloadUrl: "https://github.com/actonet/MODNet/releases/download/v0.1/modnet_photographic_portrait_matting.onnx",
+            ApproximateSizeBytes: 26_000_000
         )
     };
 

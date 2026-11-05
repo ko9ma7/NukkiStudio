@@ -16,7 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\**\*" />
+    <Resource Include="Assets\*.ico;Assets\*.png;Assets\*.svg" />
+    <None Include="Assets\Models\*.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
