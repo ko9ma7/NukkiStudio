@@ -1,12 +1,14 @@
 using System;
+using System.Collections.Generic;
 using NukkiStudio.Models;
 
 namespace NukkiStudio.Services;
 
 /// <summary>
 /// High-performance ChromaKey matting engine using direct memory operations.
-/// Supports arbitrary key colors (Green Screen, Blue Screen, Magenta, etc.),
-/// tolerance thresholding, smoothstep edge transitions, and automatic spill suppression.
+/// Supports arbitrary key colors, tolerance thresholding, smoothstep transitions,
+/// spill suppression, exterior contiguous flood-fill (to prevent internal hole punching),
+/// and foreground protection seeds.
 /// </summary>
 public class ChromaKeyMattingEngine : IMattingEngine
 {
@@ -25,14 +27,13 @@ public class ChromaKeyMattingEngine : IMattingEngine
         if (buffer == null || buffer.Length < width * height * 4)
             return;
 
+        int totalPixels = width * height;
+        byte[] mask = ComputeAlphaMask(buffer, width, height, settings);
+
         float keyR = settings.KeyColor.R / 255.0f;
         float keyG = settings.KeyColor.G / 255.0f;
         float keyB = settings.KeyColor.B / 255.0f;
-
-        float tol = Math.Clamp((float)settings.Tolerance, 0.001f, 1.0f);
-        float smooth = Math.Max(0.001f, (float)settings.Smoothness);
         float spill = Math.Clamp((float)settings.SpillSuppression, 0.0f, 1.0f);
-
         bool isGreenDominant = keyG > keyR && keyG > keyB;
         bool isBlueDominant = keyB > keyR && keyB > keyG;
 
@@ -40,7 +41,7 @@ public class ChromaKeyMattingEngine : IMattingEngine
         {
             BackgroundType.GreenScreen => true,
             BackgroundType.CustomColor => true,
-            BackgroundType.CustomImage when backgroundBuffer != null && backgroundBuffer.Length >= width * height * 4 => true,
+            BackgroundType.CustomImage when backgroundBuffer != null && backgroundBuffer.Length >= totalPixels * 4 => true,
             _ => false
         };
 
@@ -63,49 +64,28 @@ public class ChromaKeyMattingEngine : IMattingEngine
             _ => 0
         };
 
-        int totalPixels = width * height;
-
         fixed (byte* pBuf = buffer)
+        fixed (byte* pMask = mask)
         fixed (byte* pCustomBg = backgroundBuffer)
         {
             byte* ptr = pBuf;
+            byte* mPtr = pMask;
             byte* bgPtr = pCustomBg;
 
-            for (int i = 0; i < totalPixels; i++, ptr += 4)
+            for (int i = 0; i < totalPixels; i++, ptr += 4, mPtr++)
             {
+                byte alpha = *mPtr;
                 byte r = ptr[0];
                 byte g = ptr[1];
                 byte b = ptr[2];
 
-                float rf = r / 255.0f;
-                float gf = g / 255.0f;
-                float bf = b / 255.0f;
-
-                // Color distance in normalized RGB space
-                float dr = rf - keyR;
-                float dg = gf - keyG;
-                float db = bf - keyB;
-                float dist = MathF.Sqrt(dr * dr + dg * dg + db * db) * InvSqrt3;
-
-                // Alpha calculation with smoothstep
-                float alpha;
-                if (dist <= tol)
-                {
-                    alpha = 0.0f;
-                }
-                else if (dist >= tol + smooth)
-                {
-                    alpha = 1.0f;
-                }
-                else
-                {
-                    float t = (dist - tol) / smooth;
-                    alpha = t * t * (3.0f - 2.0f * t); // Smoothstep
-                }
-
                 // Spill Suppression on foreground
-                if (alpha > 0.0f && spill > 0.0f)
+                if (alpha > 0 && spill > 0.0f)
                 {
+                    float rf = r / 255.0f;
+                    float gf = g / 255.0f;
+                    float bf = b / 255.0f;
+
                     if (isGreenDominant)
                     {
                         float avgRB = (rf + bf) * 0.5f;
@@ -132,7 +112,7 @@ public class ChromaKeyMattingEngine : IMattingEngine
                     ptr[0] = r;
                     ptr[1] = g;
                     ptr[2] = b;
-                    ptr[3] = (byte)(alpha * 255.0f);
+                    ptr[3] = alpha;
                 }
                 else
                 {
@@ -148,10 +128,12 @@ public class ChromaKeyMattingEngine : IMattingEngine
                         targetBgB = bgPtr[i * 4 + 2];
                     }
 
-                    float invAlpha = 1.0f - alpha;
-                    ptr[0] = (byte)Math.Clamp((int)(r * alpha + targetBgR * invAlpha), 0, 255);
-                    ptr[1] = (byte)Math.Clamp((int)(g * alpha + targetBgG * invAlpha), 0, 255);
-                    ptr[2] = (byte)Math.Clamp((int)(b * alpha + targetBgB * invAlpha), 0, 255);
+                    float aNorm = alpha / 255.0f;
+                    float invAlpha = 1.0f - aNorm;
+
+                    ptr[0] = (byte)Math.Clamp((int)(r * aNorm + targetBgR * invAlpha), 0, 255);
+                    ptr[1] = (byte)Math.Clamp((int)(g * aNorm + targetBgG * invAlpha), 0, 255);
+                    ptr[2] = (byte)Math.Clamp((int)(b * aNorm + targetBgB * invAlpha), 0, 255);
                     ptr[3] = 255;
                 }
             }
@@ -176,14 +158,16 @@ public class ChromaKeyMattingEngine : IMattingEngine
 
         float tol = Math.Clamp((float)settings.Tolerance, 0.001f, 1.0f);
         float smooth = Math.Max(0.001f, (float)settings.Smoothness);
+        float maxKeyDist = tol + smooth;
+
+        // Step 1: Precompute distance & raw candidate background map
+        float[] distances = new float[totalPixels];
+        bool[] isCandidateBg = new bool[totalPixels];
 
         fixed (byte* pBuf = buffer)
-        fixed (byte* pMask = mask)
         {
             byte* ptr = pBuf;
-            byte* mPtr = pMask;
-
-            for (int i = 0; i < totalPixels; i++, ptr += 4, mPtr++)
+            for (int i = 0; i < totalPixels; i++, ptr += 4)
             {
                 float rf = ptr[0] / 255.0f;
                 float gf = ptr[1] / 255.0f;
@@ -194,6 +178,116 @@ public class ChromaKeyMattingEngine : IMattingEngine
                 float db = bf - keyB;
                 float dist = MathF.Sqrt(dr * dr + dg * dg + db * db) * InvSqrt3;
 
+                distances[i] = dist;
+                isCandidateBg[i] = dist <= maxKeyDist;
+            }
+        }
+
+        // Step 2: If ContiguousOnly is enabled, find only exterior-connected background pixels via BFS
+        bool[] isExterior = new bool[totalPixels];
+        if (settings.ContiguousOnly)
+        {
+            int[] queue = new int[totalPixels];
+            int head = 0, tail = 0;
+
+            // Seed from 4 outer image edges (Top & Bottom rows)
+            for (int x = 0; x < width; x++)
+            {
+                int topIdx = x;
+                int botIdx = (height - 1) * width + x;
+                if (isCandidateBg[topIdx] && !isExterior[topIdx])
+                {
+                    isExterior[topIdx] = true;
+                    queue[tail++] = topIdx;
+                }
+                if (isCandidateBg[botIdx] && !isExterior[botIdx])
+                {
+                    isExterior[botIdx] = true;
+                    queue[tail++] = botIdx;
+                }
+            }
+
+            // Seed from Left & Right columns
+            for (int y = 0; y < height; y++)
+            {
+                int leftIdx = y * width;
+                int rightIdx = y * width + (width - 1);
+                if (isCandidateBg[leftIdx] && !isExterior[leftIdx])
+                {
+                    isExterior[leftIdx] = true;
+                    queue[tail++] = leftIdx;
+                }
+                if (isCandidateBg[rightIdx] && !isExterior[rightIdx])
+                {
+                    isExterior[rightIdx] = true;
+                    queue[tail++] = rightIdx;
+                }
+            }
+
+            // 4-way BFS expansion
+            while (head < tail)
+            {
+                int curr = queue[head++];
+                int cx = curr % width;
+                int cy = curr / width;
+
+                // Up
+                if (cy > 0)
+                {
+                    int n = curr - width;
+                    if (isCandidateBg[n] && !isExterior[n])
+                    {
+                        isExterior[n] = true;
+                        queue[tail++] = n;
+                    }
+                }
+                // Down
+                if (cy < height - 1)
+                {
+                    int s = curr + width;
+                    if (isCandidateBg[s] && !isExterior[s])
+                    {
+                        isExterior[s] = true;
+                        queue[tail++] = s;
+                    }
+                }
+                // Left
+                if (cx > 0)
+                {
+                    int w = curr - 1;
+                    if (isCandidateBg[w] && !isExterior[w])
+                    {
+                        isExterior[w] = true;
+                        queue[tail++] = w;
+                    }
+                }
+                // Right
+                if (cx < width - 1)
+                {
+                    int e = curr + 1;
+                    if (isCandidateBg[e] && !isExterior[e])
+                    {
+                        isExterior[e] = true;
+                        queue[tail++] = e;
+                    }
+                }
+            }
+        }
+
+        // Step 3: Compute final Alpha values
+        fixed (byte* pMask = mask)
+        {
+            byte* mPtr = pMask;
+            for (int i = 0; i < totalPixels; i++, mPtr++)
+            {
+                // If ContiguousOnly is on and this pixel is NOT reached from exterior, preserve it (Alpha = 255)!
+                if (settings.ContiguousOnly && !isExterior[i])
+                {
+                    *mPtr = 255;
+                    continue;
+                }
+
+                float dist = distances[i];
                 if (dist <= tol)
                 {
                     *mPtr = 0;
@@ -205,8 +299,40 @@ public class ChromaKeyMattingEngine : IMattingEngine
                 else
                 {
                     float t = (dist - tol) / smooth;
-                    float alpha = t * t * (3.0f - 2.0f * t);
+                    float alpha = t * t * (3.0f - 2.0f * t); // Smoothstep
                     *mPtr = (byte)(alpha * 255.0f);
+                }
+            }
+        }
+
+        // Step 4: Apply Protected Foreground Seeds (exclude user-selected regions from removal)
+        if (settings.ProtectedPoints != null && settings.ProtectedPoints.Count > 0)
+        {
+            double rSq = settings.ProtectRadius * settings.ProtectRadius;
+            fixed (byte* pMask = mask)
+            {
+                foreach (var pt in settings.ProtectedPoints)
+                {
+                    int minX = Math.Max(0, (int)(pt.X - settings.ProtectRadius));
+                    int maxX = Math.Min(width - 1, (int)(pt.X + settings.ProtectRadius));
+                    int minY = Math.Max(0, (int)(pt.Y - settings.ProtectRadius));
+                    int maxY = Math.Min(height - 1, (int)(pt.Y + settings.ProtectRadius));
+
+                    for (int y = minY; y <= maxY; y++)
+                    {
+                        int row = y * width;
+                        double dy = y - pt.Y;
+                        double dySq = dy * dy;
+
+                        for (int x = minX; x <= maxX; x++)
+                        {
+                            double dx = x - pt.X;
+                            if (dx * dx + dySq <= rSq)
+                            {
+                                pMask[row + x] = 255; // Force solid foreground
+                            }
+                        }
+                    }
                 }
             }
         }

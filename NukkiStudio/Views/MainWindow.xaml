@@ -325,9 +325,14 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <ToggleButton IsChecked="{Binding IsColorPickerActive}" Style="{StaticResource TabToggleButton}" Padding="10,6" Margin="0,0,8,0" ToolTip="화면에서 배경색 직접 스포이트 추출">
+                            <ToggleButton IsChecked="{Binding IsColorPickerActive}" Style="{StaticResource TabToggleButton}" Padding="10,6" Margin="0,0,6,0" ToolTip="화면에서 배경 기준색 직접 스포이트 추출">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🔍 스포이트 색상 추출" FontSize="12" />
+                                    <TextBlock Text="🔍 배경색 스포이트" FontSize="12" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <ToggleButton IsChecked="{Binding IsProtectPickerActive}" Style="{StaticResource TabToggleButton}" Padding="10,6" Margin="0,0,8,0" ToolTip="누끼에서 제외할 피사체(모자, 인형, 얼굴 등) 클릭 보호">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🛡️ 전경(피사체) 보호 클릭" FontSize="12" />
                                 </StackPanel>
                             </ToggleButton>
                         </StackPanel>
@@ -357,6 +362,9 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsColorPickerActive}" Value="True">
                                                 <Setter Property="Cursor" Value="Cross" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsProtectPickerActive}" Value="True">
+                                                <Setter Property="Cursor" Value="Hand" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -413,7 +421,19 @@
                         <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16"
                                 Visibility="{Binding SelectedMode, Converter={StaticResource EnumToVis}, ConverterParameter=ChromaKey}">
                             <StackPanel>
-                                <TextBlock Text="크로마키 상세 조절" FontSize="13" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,12" />
+                                <TextBlock Text="크로마키 상세 조절" FontSize="13" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,10" />
+
+                                <!-- Studio White Background Guide Tip -->
+                                <Border Background="#1E1B4B" BorderBrush="#6366F1" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,10">
+                                    <TextBlock Text="💡 꿀팁: 흰색 배경 피사체는 아래 '외곽 연결 배경만 제거'를 켜두시면 피사체 내부의 흰색(모자, 인형 등)이 안전하게 보존됩니다!" 
+                                               FontSize="10" Foreground="#C7D2FE" TextWrapping="Wrap" LineHeight="14" />
+                                </Border>
+
+                                <!-- Contiguous Exterior Checkbox -->
+                                <CheckBox Content="연속된 외곽 배경만 제거 (내부 구멍 방지)"
+                                          IsChecked="{Binding ContiguousOnly}"
+                                          Foreground="#38BDF8" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,12"
+                                          ToolTip="배경 테두리와 연결된 외부 배경만 누끼를 따고, 피사체 내부의 동일한 색상은 그대로 보존합니다." />
 
                                 <TextBlock Text="추출할 배경색 (Key Color)" FontSize="11" Foreground="#CBD5E1" Margin="0,0,0,4" />
                                 <Grid Margin="0,0,0,12">
@@ -462,7 +482,33 @@
                                     <TextBlock Grid.Column="0" Text="배경색 반사 억제 (Spill Removal)" FontSize="11" Foreground="#CBD5E1" />
                                     <TextBlock Grid.Column="1" Text="{Binding SpillSuppression, StringFormat={}{0:F2}}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
                                 </Grid>
-                                <Slider Value="{Binding SpillSuppression}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1" />
+                                <Slider Value="{Binding SpillSuppression}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1" Margin="0,0,0,12" />
+
+                                <!-- Foreground Protection Seed Points Control -->
+                                <Border Background="#0F172A" CornerRadius="6" BorderBrush="#334155" BorderThickness="1" Padding="10">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🛡️ 전경 보호 반경 (Protect Radius)" FontSize="11" Foreground="#CBD5E1" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ProtectRadius, StringFormat={}{0:F0}px}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                        </Grid>
+                                        <Slider Value="{Binding ProtectRadius}" Minimum="10" Maximum="150" SmallChange="5" LargeChange="20" Margin="0,0,0,6" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="보호 지점: " FontSize="10" Foreground="#94A3B8" />
+                                                <TextBlock Text="{Binding ProtectedPointsCount, StringFormat={}{0}개}" FontSize="10" FontWeight="Bold" Foreground="#34D399" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="지점 초기화" Style="{StaticResource SecondaryButton}" Padding="6,2" FontSize="10" Command="{Binding ClearProtectedPointsCommand}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
 

@@ -92,7 +92,7 @@ public partial class MainWindow : Window
 
     private void OriginalPreview_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (!ViewModel.IsColorPickerActive || ViewModel.OriginalPreviewImage == null)
+        if ((!ViewModel.IsColorPickerActive && !ViewModel.IsProtectPickerActive) || ViewModel.OriginalPreviewImage == null)
             return;
 
         var pos = e.GetPosition(OriginalPreviewElement);

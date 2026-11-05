@@ -15,6 +15,9 @@ public class MattingSettings
     public double Tolerance { get; set; } = 0.28; // 0.0 ~ 1.0 (Color similarity threshold)
     public double Smoothness { get; set; } = 0.12; // 0.0 ~ 1.0 (Edge transition falloff)
     public double SpillSuppression { get; set; } = 0.50; // 0.0 ~ 1.0 (Removes green reflections on hair/edges)
+    public bool ContiguousOnly { get; set; } = true; // Only remove background connected to exterior borders
+    public List<System.Windows.Point> ProtectedPoints { get; set; } = new(); // Areas to exclude from removal
+    public double ProtectRadius { get; set; } = 35.0;
 
     // AI Neural parameters
     public string SelectedModelPath { get; set; } = "";

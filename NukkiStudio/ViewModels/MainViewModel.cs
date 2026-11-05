@@ -116,6 +116,20 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isColorPickerActive;
 
+    [ObservableProperty]
+    private bool _isProtectPickerActive;
+
+    [ObservableProperty]
+    private bool _contiguousOnly = true;
+
+    [ObservableProperty]
+    private double _protectRadius = 35.0;
+
+    public ObservableCollection<Point> ProtectedPoints { get; } = new();
+
+    [ObservableProperty]
+    private int _protectedPointsCount;
+
     public MainViewModel()
     {
         _ffmpegService = new FFmpegService();
@@ -161,6 +175,26 @@ public partial class MainViewModel : ObservableObject
     partial void OnSelectedModeChanged(MattingMode value) => UpdateLivePreview();
     partial void OnSelectedBgTypeChanged(BackgroundType value) => UpdateLivePreview();
     partial void OnCustomBgColorChanged(Color value) => UpdateLivePreview();
+    partial void OnContiguousOnlyChanged(bool value) => UpdateLivePreview();
+    partial void OnProtectRadiusChanged(double value) => UpdateLivePreview();
+
+    partial void OnIsColorPickerActiveChanged(bool value)
+    {
+        if (value) IsProtectPickerActive = false;
+    }
+
+    partial void OnIsProtectPickerActiveChanged(bool value)
+    {
+        if (value) IsColorPickerActive = false;
+    }
+
+    [RelayCommand]
+    public void ClearProtectedPoints()
+    {
+        ProtectedPoints.Clear();
+        ProtectedPointsCount = 0;
+        UpdateLivePreview();
+    }
 
     [RelayCommand]
     public void AddFiles()
@@ -595,14 +629,27 @@ public partial class MainViewModel : ObservableObject
                 pixelY < 0 || pixelY >= OriginalPreviewImage.PixelHeight)
                 return;
 
-            var cropped = new CroppedBitmap(OriginalPreviewImage, new Int32Rect(pixelX, pixelY, 1, 1));
-            byte[] pixel = new byte[4];
-            cropped.CopyPixels(pixel, 4, 0);
+            if (IsProtectPickerActive)
+            {
+                ProtectedPoints.Add(new Point(pixelX, pixelY));
+                ProtectedPointsCount = ProtectedPoints.Count;
+                StatusMessage = $"전경 보호 영역이 추가되었습니다 ({ProtectedPointsCount}개 지점).";
+                UpdateLivePreview();
+                return;
+            }
 
-            // PixelFormats.Bgra32: [0] = Blue, [1] = Green, [2] = Red, [3] = Alpha
-            KeyColor = Color.FromRgb(pixel[2], pixel[1], pixel[0]);
-            IsColorPickerActive = false;
-            UpdateLivePreview();
+            if (IsColorPickerActive)
+            {
+                var cropped = new CroppedBitmap(OriginalPreviewImage, new Int32Rect(pixelX, pixelY, 1, 1));
+                byte[] pixel = new byte[4];
+                cropped.CopyPixels(pixel, 4, 0);
+
+                // PixelFormats.Bgra32: [0] = Blue, [1] = Green, [2] = Red, [3] = Alpha
+                KeyColor = Color.FromRgb(pixel[2], pixel[1], pixel[0]);
+                IsColorPickerActive = false;
+                StatusMessage = $"배경 기준색이 추출되었습니다: #{KeyColor.R:X2}{KeyColor.G:X2}{KeyColor.B:X2}";
+                UpdateLivePreview();
+            }
         }
         catch { }
     }
@@ -617,6 +664,9 @@ public partial class MainViewModel : ObservableObject
             Tolerance = Tolerance,
             Smoothness = Smoothness,
             SpillSuppression = SpillSuppression,
+            ContiguousOnly = ContiguousOnly,
+            ProtectedPoints = ProtectedPoints.ToList(),
+            ProtectRadius = ProtectRadius,
             CustomBgColor = CustomBgColor,
             CustomBgImagePath = CustomBgImagePath,
             VideoFormat = SelectedVideoFormat,
