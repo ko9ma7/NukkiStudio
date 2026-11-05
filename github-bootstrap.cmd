@@ -177,6 +177,11 @@ echo [META] GitHub Repository 설정 및 토픽 적용 중...
 gh repo edit --description "%REPO_DESC%" --add-topic "%REPO_TOPICS%" 2>nul
 echo [OK] Repository Description 및 Topics 적용 완료.
 
+:: Enable GitHub Pages for web-preview
+echo [PAGES] GitHub Pages 활성화 중...
+gh api --method POST "repos/:owner/%REPO_NAME%/pages" -f "build_type=workflow" >nul 2>nul
+echo [OK] GitHub Pages 활성화 완료.
+
 :: ----------------------------------------------------------------------------
 :: 11. Create & Push Initial Tag (v1.0.0)
 :: ----------------------------------------------------------------------------
