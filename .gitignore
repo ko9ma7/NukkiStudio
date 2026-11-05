@@ -27,6 +27,7 @@ Desktop.ini
 *.onnx
 *.onnx.tmp
 Models/*.onnx
+!NukkiStudio/Assets/Models/u2netp.onnx
 !NukkiStudio/Assets/*.ico
 !NukkiStudio/Assets/*.png
 
