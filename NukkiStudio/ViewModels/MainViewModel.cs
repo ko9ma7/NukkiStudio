@@ -119,6 +119,50 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isProtectPickerActive;
 
+    // Interactive Tools & Fine-Tuning State
+    [ObservableProperty]
+    private MattingToolMode _activeTool = MattingToolMode.None;
+
+    [ObservableProperty]
+    private double _brushSize = 35.0;
+
+    public ObservableCollection<BrushStrokePoint> BrushStrokes { get; } = new();
+
+    [ObservableProperty]
+    private int _brushStrokeCount;
+
+    [ObservableProperty]
+    private bool _enableRoi;
+
+    [ObservableProperty]
+    private Rect? _roiRect;
+
+    [ObservableProperty]
+    private string _roiDisplayInfo = "미지정 (전체 영역)";
+
+    // Secondary Key Color (e.g. for ground shadows / floor reflections)
+    [ObservableProperty]
+    private bool _enableSecondaryKey;
+
+    [ObservableProperty]
+    private Color _secondaryKeyColor = Color.FromRgb(200, 200, 200);
+
+    [ObservableProperty]
+    private double _secondaryTolerance = 0.18;
+
+    // Mask Fine-Tuning Edge Filters
+    [ObservableProperty]
+    private int _maskErodeDilate; // Negative = Erode/Choke fringe (-10 ~ 0), Positive = Dilate (0 ~ 10)
+
+    [ObservableProperty]
+    private int _maskFeather; // Soft edge feather (0 ~ 20)
+
+    [ObservableProperty]
+    private double _maskThreshold; // Black level cutoff (0.0 ~ 0.5)
+
+    [ObservableProperty]
+    private double _maskContrast = 1.0; // Mask contrast (0.5 ~ 3.0)
+
     [ObservableProperty]
     private bool _contiguousOnly = true;
 
@@ -193,14 +237,131 @@ public partial class MainViewModel : ObservableObject
     partial void OnContiguousOnlyChanged(bool value) => UpdateLivePreview();
     partial void OnProtectRadiusChanged(double value) => UpdateLivePreview();
 
+    // Fine-Tuning & Mask Filter Property Change Hooks
+    partial void OnMaskErodeDilateChanged(int value) => UpdateLivePreview();
+    partial void OnMaskFeatherChanged(int value) => UpdateLivePreview();
+    partial void OnMaskThresholdChanged(double value) => UpdateLivePreview();
+    partial void OnMaskContrastChanged(double value) => UpdateLivePreview();
+    partial void OnEnableSecondaryKeyChanged(bool value) => UpdateLivePreview();
+    partial void OnSecondaryKeyColorChanged(Color value) => UpdateLivePreview();
+    partial void OnSecondaryToleranceChanged(double value) => UpdateLivePreview();
+    partial void OnEnableRoiChanged(bool value) => UpdateLivePreview();
+
+    partial void OnActiveToolChanged(MattingToolMode value)
+    {
+        IsColorPickerActive = (value == MattingToolMode.ColorPicker);
+        IsProtectPickerActive = false;
+        StatusMessage = value switch
+        {
+            MattingToolMode.ColorPicker => "🔍 배경색 스포이트: 미리보기에서 추출할 주 배경색을 클릭하세요.",
+            MattingToolMode.SecondaryColorPicker => "🎯 2차 배경색 스포이트: 제거할 바닥 그림자나 보조 색상을 클릭하세요.",
+            MattingToolMode.RoiBox => "🔲 관심 영역(ROI) 박스: 남길 피사체 주변을 마우스로 드래그하여 사각형으로 지정하세요.",
+            MattingToolMode.IncludeBrush => "🟢 살리기 브러시: 날아간 피사체(모자, 인형, 손 등)를 마우스로 칠해 100% 복원하세요.",
+            MattingToolMode.ExcludeBrush => "🔴 지우기 브러시: 미처 제거되지 않은 배경, 얼룩, 그림자 등을 문질러 지우세요.",
+            _ => "준비 완료. 마우스로 도구를 선택하거나 영상을 변환하세요."
+        };
+    }
+
+    [RelayCommand]
+    public void ToggleTool(MattingToolMode tool)
+    {
+        ActiveTool = (ActiveTool == tool) ? MattingToolMode.None : tool;
+    }
+
+    [RelayCommand]
+    public void ClearBrushStrokes()
+    {
+        BrushStrokes.Clear();
+        BrushStrokeCount = 0;
+        StatusMessage = "브러시 스트로크가 모두 초기화되었습니다.";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ResetRoi()
+    {
+        RoiRect = null;
+        EnableRoi = false;
+        RoiDisplayInfo = "미지정 (전체 영역)";
+        StatusMessage = "관심 영역(ROI)이 초기화되어 전체 영역으로 복귀했습니다.";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ResetMaskFilters()
+    {
+        MaskErodeDilate = 0;
+        MaskFeather = 0;
+        MaskThreshold = 0.0;
+        MaskContrast = 1.0;
+        StatusMessage = "마스크 보정 필터가 기본값으로 초기화되었습니다.";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ResetAllFineTuning()
+    {
+        BrushStrokes.Clear();
+        BrushStrokeCount = 0;
+        RoiRect = null;
+        EnableRoi = false;
+        RoiDisplayInfo = "미지정 (전체 영역)";
+        MaskErodeDilate = 0;
+        MaskFeather = 0;
+        MaskThreshold = 0.0;
+        MaskContrast = 1.0;
+        EnableSecondaryKey = false;
+        ClearProtectedPoints();
+        StatusMessage = "모든 세부 선택 및 마스크 필터가 초기화되었습니다.";
+        UpdateLivePreview();
+    }
+
+    public void AddBrushStroke(double x, double y, bool isInclude)
+    {
+        BrushStrokes.Add(new BrushStrokePoint(x, y, BrushSize, isInclude));
+        BrushStrokeCount = BrushStrokes.Count;
+        UpdateLivePreview();
+    }
+
+    public void AddBrushStrokes(IEnumerable<BrushStrokePoint> points)
+    {
+        foreach (var pt in points)
+        {
+            BrushStrokes.Add(pt);
+        }
+        BrushStrokeCount = BrushStrokes.Count;
+        UpdateLivePreview();
+    }
+
+    public void SetRoi(Rect rect)
+    {
+        RoiRect = rect;
+        EnableRoi = true;
+        RoiDisplayInfo = $"{Math.Round(rect.Width)} x {Math.Round(rect.Height)} px";
+        StatusMessage = $"관심 영역(ROI) 박스 적용됨 ({RoiDisplayInfo})";
+        UpdateLivePreview();
+    }
+
     partial void OnIsColorPickerActiveChanged(bool value)
     {
-        if (value) IsProtectPickerActive = false;
+        if (value)
+        {
+            IsProtectPickerActive = false;
+            ActiveTool = MattingToolMode.ColorPicker;
+        }
+        else if (ActiveTool == MattingToolMode.ColorPicker)
+        {
+            ActiveTool = MattingToolMode.None;
+        }
     }
 
     partial void OnIsProtectPickerActiveChanged(bool value)
     {
-        if (value) IsColorPickerActive = false;
+        if (value)
+        {
+            IsColorPickerActive = false;
+            ActiveTool = MattingToolMode.None;
+        }
     }
 
     [RelayCommand]
@@ -681,6 +842,33 @@ public partial class MainViewModel : ObservableObject
                 pixelY < 0 || pixelY >= OriginalPreviewImage.PixelHeight)
                 return;
 
+            var cropped = new CroppedBitmap(OriginalPreviewImage, new Int32Rect(pixelX, pixelY, 1, 1));
+            byte[] pixel = new byte[4];
+            cropped.CopyPixels(pixel, 4, 0);
+
+            // PixelFormats.Bgra32: [0] = Blue, [1] = Green, [2] = Red, [3] = Alpha
+            var sampledColor = Color.FromRgb(pixel[2], pixel[1], pixel[0]);
+
+            if (ActiveTool == MattingToolMode.SecondaryColorPicker)
+            {
+                SecondaryKeyColor = sampledColor;
+                EnableSecondaryKey = true;
+                ActiveTool = MattingToolMode.None;
+                StatusMessage = $"2차 배경/그림자 색상이 지정되었습니다: #{sampledColor.R:X2}{sampledColor.G:X2}{sampledColor.B:X2}";
+                UpdateLivePreview();
+                return;
+            }
+
+            if (ActiveTool == MattingToolMode.ColorPicker || IsColorPickerActive)
+            {
+                KeyColor = sampledColor;
+                ActiveTool = MattingToolMode.None;
+                IsColorPickerActive = false;
+                StatusMessage = $"배경 기준색이 추출되었습니다: #{KeyColor.R:X2}{KeyColor.G:X2}{KeyColor.B:X2}";
+                UpdateLivePreview();
+                return;
+            }
+
             if (IsProtectPickerActive)
             {
                 ProtectedPoints.Add(new Point(pixelX, pixelY));
@@ -688,19 +876,6 @@ public partial class MainViewModel : ObservableObject
                 StatusMessage = $"전경 보호 영역이 추가되었습니다 ({ProtectedPointsCount}개 지점).";
                 UpdateLivePreview();
                 return;
-            }
-
-            if (IsColorPickerActive)
-            {
-                var cropped = new CroppedBitmap(OriginalPreviewImage, new Int32Rect(pixelX, pixelY, 1, 1));
-                byte[] pixel = new byte[4];
-                cropped.CopyPixels(pixel, 4, 0);
-
-                // PixelFormats.Bgra32: [0] = Blue, [1] = Green, [2] = Red, [3] = Alpha
-                KeyColor = Color.FromRgb(pixel[2], pixel[1], pixel[0]);
-                IsColorPickerActive = false;
-                StatusMessage = $"배경 기준색이 추출되었습니다: #{KeyColor.R:X2}{KeyColor.G:X2}{KeyColor.B:X2}";
-                UpdateLivePreview();
             }
         }
         catch { }
@@ -719,6 +894,16 @@ public partial class MainViewModel : ObservableObject
             ContiguousOnly = ContiguousOnly,
             ProtectedPoints = ProtectedPoints.ToList(),
             ProtectRadius = ProtectRadius,
+            EnableSecondaryKey = EnableSecondaryKey,
+            SecondaryKeyColor = SecondaryKeyColor,
+            SecondaryTolerance = SecondaryTolerance,
+            EnableRoi = EnableRoi,
+            RoiRect = RoiRect,
+            MaskErodeDilate = MaskErodeDilate,
+            MaskFeather = MaskFeather,
+            MaskThreshold = MaskThreshold,
+            MaskContrast = MaskContrast,
+            BrushStrokes = BrushStrokes.ToList(),
             CustomBgColor = CustomBgColor,
             CustomBgImagePath = CustomBgImagePath,
             VideoFormat = SelectedVideoFormat,

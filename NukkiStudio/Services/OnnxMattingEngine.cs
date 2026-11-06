@@ -251,6 +251,9 @@ public class OnnxMattingEngine : IMattingEngine, IDisposable
                 }
             }
 
+            // Apply Advanced Mask Post-Processing (ROI crop, Brush strokes, Erode/Dilate, Feather, Contrast)
+            MaskPostProcessor.ApplyPostProcessing(targetMask, width, height, settings);
+
             return targetMask;
         }
     }

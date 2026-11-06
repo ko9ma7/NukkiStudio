@@ -156,6 +156,12 @@ public class ChromaKeyMattingEngine : IMattingEngine
         float keyG = settings.KeyColor.G / 255.0f;
         float keyB = settings.KeyColor.B / 255.0f;
 
+        float secKeyR = settings.SecondaryKeyColor.R / 255.0f;
+        float secKeyG = settings.SecondaryKeyColor.G / 255.0f;
+        float secKeyB = settings.SecondaryKeyColor.B / 255.0f;
+        float secTol = Math.Clamp((float)settings.SecondaryTolerance, 0.001f, 1.0f);
+        bool hasSecKey = settings.EnableSecondaryKey;
+
         float tol = Math.Clamp((float)settings.Tolerance, 0.001f, 1.0f);
         float smooth = Math.Max(0.001f, (float)settings.Smoothness);
         float maxKeyDist = tol + smooth;
@@ -177,6 +183,19 @@ public class ChromaKeyMattingEngine : IMattingEngine
                 float dg = gf - keyG;
                 float db = bf - keyB;
                 float dist = MathF.Sqrt(dr * dr + dg * dg + db * db) * InvSqrt3;
+
+                // Secondary key color check (e.g. floor shadows / studio gradients)
+                if (hasSecKey)
+                {
+                    float sdr = rf - secKeyR;
+                    float sdg = gf - secKeyG;
+                    float sdb = bf - secKeyB;
+                    float secDist = MathF.Sqrt(sdr * sdr + sdg * sdg + sdb * sdb) * InvSqrt3;
+                    if (secDist <= secTol)
+                    {
+                        dist = MathF.Min(dist, secDist);
+                    }
+                }
 
                 distances[i] = dist;
                 isCandidateBg[i] = dist <= maxKeyDist;
@@ -336,6 +355,9 @@ public class ChromaKeyMattingEngine : IMattingEngine
                 }
             }
         }
+
+        // Step 5: Advanced Mask Post-Processing (ROI crop, Brush strokes, Erode/Dilate, Feather, Contrast)
+        MaskPostProcessor.ApplyPostProcessing(mask, width, height, settings);
 
         return mask;
     }

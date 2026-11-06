@@ -19,6 +19,24 @@ public class MattingSettings
     public List<System.Windows.Point> ProtectedPoints { get; set; } = new(); // Areas to exclude from removal
     public double ProtectRadius { get; set; } = 35.0;
 
+    // Secondary Key Color (e.g. for ground shadows / secondary background tint)
+    public bool EnableSecondaryKey { get; set; } = false;
+    public Color SecondaryKeyColor { get; set; } = Color.FromRgb(200, 200, 200);
+    public double SecondaryTolerance { get; set; } = 0.18;
+
+    // Subject Isolation Bounding Box (ROI)
+    public bool EnableRoi { get; set; } = false;
+    public System.Windows.Rect? RoiRect { get; set; }
+
+    // Mask Post-Processing Fine-Tuning
+    public int MaskErodeDilate { get; set; } = 0; // Negative = Erode/Choke fringe, Positive = Dilate
+    public int MaskFeather { get; set; } = 0; // Edge blur/feather radius (0 ~ 20)
+    public double MaskThreshold { get; set; } = 0.0; // Black cutoff for faint artifacts (0.0 ~ 0.8)
+    public double MaskContrast { get; set; } = 1.0; // S-curve contrast boost (0.5 ~ 3.0)
+
+    // Interactive Paint Strokes
+    public List<NukkiStudio.Services.BrushStrokePoint> BrushStrokes { get; set; } = new();
+
     // AI Neural parameters
     public string SelectedModelPath { get; set; } = "";
     public bool UseGpuAcceleration { get; set; } = true;
@@ -36,6 +54,9 @@ public class MattingSettings
 
     public MattingSettings Clone()
     {
-        return (MattingSettings)MemberwiseClone();
+        var clone = (MattingSettings)MemberwiseClone();
+        clone.ProtectedPoints = new List<System.Windows.Point>(ProtectedPoints);
+        clone.BrushStrokes = new List<NukkiStudio.Services.BrushStrokePoint>(BrushStrokes);
+        return clone;
     }
 }

@@ -311,32 +311,78 @@
                     </Grid.RowDefinitions>
 
                     <!-- Preview Mode / Controls -->
-                    <Grid Grid.Row="0" Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                    <Border Grid.Row="0" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="실시간 미리보기 (Live Preview)" FontSize="14" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
-                            <Border Background="#334155" CornerRadius="4" Padding="6,2" Margin="10,0,0,0">
-                                <TextBlock Text="좌측: 원본 | 우측: 누끼 결과" FontSize="11" Foreground="#94A3B8" />
-                            </Border>
-                        </StackPanel>
+                            <!-- Left: Title & Hint -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="실시간 미리보기" FontSize="13" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                                <Border Background="#334155" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                    <TextBlock Text="좌: 원본 | 우: 누끼 결과" FontSize="11" Foreground="#94A3B8" />
+                                </Border>
+                            </StackPanel>
 
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <ToggleButton IsChecked="{Binding IsColorPickerActive}" Style="{StaticResource TabToggleButton}" Padding="10,6" Margin="0,0,6,0" ToolTip="화면에서 배경 기준색 직접 스포이트 추출">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🔍 배경색 스포이트" FontSize="12" />
-                                </StackPanel>
-                            </ToggleButton>
-                            <ToggleButton IsChecked="{Binding IsProtectPickerActive}" Style="{StaticResource TabToggleButton}" Padding="10,6" Margin="0,0,8,0" ToolTip="누끼에서 제외할 피사체(모자, 인형, 얼굴 등) 클릭 보호">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🛡️ 전경(피사체) 보호 클릭" FontSize="12" />
-                                </StackPanel>
-                            </ToggleButton>
-                        </StackPanel>
-                    </Grid>
+                            <!-- Center: Interactive Tool Buttons -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <!-- Eyedroppers -->
+                                <ToggleButton IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBool}, ConverterParameter=ColorPicker}"
+                                              Style="{StaticResource TabToggleButton}" Padding="8,5" Margin="0,0,4,0" ToolTip="화면에서 배경 기준색 직접 스포이트 추출">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🔍 배경색 스포이트" FontSize="11" />
+                                    </StackPanel>
+                                </ToggleButton>
+
+                                <ToggleButton IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBool}, ConverterParameter=SecondaryColorPicker}"
+                                              Style="{StaticResource TabToggleButton}" Padding="8,5" Margin="0,0,4,0" ToolTip="바닥 그림자나 2차 배경색 추가 스포이트 추출">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🎯 그림자/2차색" FontSize="11" />
+                                    </StackPanel>
+                                </ToggleButton>
+
+                                <Rectangle Width="1" Height="20" Fill="#334155" Margin="4,0,8,0" />
+
+                                <!-- Subject Isolation ROI Box -->
+                                <ToggleButton IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBool}, ConverterParameter=RoiBox}"
+                                              Style="{StaticResource TabToggleButton}" Padding="8,5" Margin="0,0,4,0" ToolTip="피사체 주변을 사각형으로 드래그하여 특정 (박스 바깥 배경 즉시 100% 제거)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🔲 피사체 특정 (ROI)" FontSize="11" />
+                                    </StackPanel>
+                                </ToggleButton>
+
+                                <!-- Brushes -->
+                                <ToggleButton IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBool}, ConverterParameter=IncludeBrush}"
+                                              Style="{StaticResource TabToggleButton}" Padding="8,5" Margin="0,0,4,0" ToolTip="지워진 피사체(모자, 인형, 얼굴 등)를 칠해서 100% 살리기 (초록)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🟢 살리기 브러시" FontSize="11" Foreground="#34D399" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </ToggleButton>
+
+                                <ToggleButton IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBool}, ConverterParameter=ExcludeBrush}"
+                                              Style="{StaticResource TabToggleButton}" Padding="8,5" Margin="0,0,4,0" ToolTip="남아있는 배경, 얼룩, 그림자 등을 문질러서 지우기 (빨강)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🔴 지우기 브러시" FontSize="11" Foreground="#F87171" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </ToggleButton>
+                            </StackPanel>
+
+                            <!-- Right: Brush Size & Quick Clear -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="크기:" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <Slider Value="{Binding BrushSize}" Minimum="5" Maximum="150" Width="65" VerticalAlignment="Center" ToolTip="브러시 크기 조절" />
+                                <TextBlock Text="{Binding BrushSize, StringFormat={}{0:F0}px}" FontSize="10" Foreground="#38BDF8" Width="30" Margin="4,0,8,0" VerticalAlignment="Center" />
+
+                                <Button Content="🧹 브러시 삭제" Style="{StaticResource SecondaryButton}" Padding="6,4" FontSize="10" Margin="0,0,4,0"
+                                        Command="{Binding ClearBrushStrokesCommand}" ToolTip="그린 모든 브러시 초기화" />
+                                <Button Content="✖️ ROI 해제" Style="{StaticResource SecondaryButton}" Padding="6,4" FontSize="10"
+                                        Command="{Binding ResetRoiCommand}" ToolTip="지정한 관심 영역 해제" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
                     <!-- Main Preview Display -->
                     <Border Grid.Row="1" Background="{StaticResource CheckerboardBrush}" CornerRadius="10" BorderBrush="#334155" BorderThickness="1" ClipToBounds="True">
@@ -354,21 +400,7 @@
                                    Source="{Binding OriginalPreviewImage}"
                                    Stretch="Uniform"
                                    HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   MouseLeftButtonDown="OriginalPreview_MouseLeftButtonDown">
-                                <Image.Style>
-                                    <Style TargetType="Image">
-                                        <Setter Property="Cursor" Value="Arrow" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsColorPickerActive}" Value="True">
-                                                <Setter Property="Cursor" Value="Cross" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsProtectPickerActive}" Value="True">
-                                                <Setter Property="Cursor" Value="Hand" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Image.Style>
+                                   VerticalAlignment="Center">
                                 <Image.Clip>
                                     <RectangleGeometry x:Name="SplitClipGeometry" />
                                 </Image.Clip>
@@ -377,6 +409,21 @@
                             <!-- Vertical Split Separator Line -->
                             <Canvas x:Name="SplitLineCanvas" IsHitTestVisible="False">
                                 <Line x:Name="SplitDividerLine" Stroke="#38BDF8" StrokeThickness="2" />
+                            </Canvas>
+
+                            <!-- Interactive Interaction Overlay Canvas (ROI Box, Brushes, Eyedroppers) -->
+                            <Canvas x:Name="OverlayCanvas"
+                                    Background="Transparent"
+                                    MouseDown="OverlayCanvas_MouseDown"
+                                    MouseMove="OverlayCanvas_MouseMove"
+                                    MouseUp="OverlayCanvas_MouseUp"
+                                    MouseLeave="OverlayCanvas_MouseLeave">
+                                <!-- Confirmed ROI Bounding Box -->
+                                <Rectangle x:Name="RoiVisualRect" Stroke="#38BDF8" StrokeThickness="2" StrokeDashArray="4 2" Fill="#2038BDF8" Visibility="Collapsed" />
+                                <!-- Active Dragging ROI Box -->
+                                <Rectangle x:Name="DragRoiVisualRect" Stroke="#F59E0B" StrokeThickness="2" StrokeDashArray="2 2" Fill="#30F59E0B" Visibility="Collapsed" />
+                                <!-- Live Mouse Cursor Brush Radius Indicator -->
+                                <Ellipse x:Name="BrushCursorIndicator" Width="30" Height="30" Stroke="#34D399" StrokeThickness="1.5" IsHitTestVisible="False" Visibility="Collapsed" />
                             </Canvas>
                         </Grid>
                     </Border>
@@ -534,8 +581,135 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 2. Background Replacement Selection -->
-                        <TextBlock Text="2. 배경 교체 및 합성 (Background)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <!-- 2. Interactive Selection & Exclusion Tools (ROI, Brushes, Secondary Key) -->
+                        <TextBlock Text="2. 피사체 선택 및 제외 도구 (Selection &amp; Overrides)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16">
+                            <StackPanel>
+                                <!-- ROI Subject Box -->
+                                <TextBlock Text="🔲 관심 영역 (ROI) 박스로 피사체 특정" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,4" />
+                                <TextBlock Text="지정한 사각형 박스 바깥의 모든 배경은 100% 제거(투명화)됩니다." FontSize="10" Foreground="#94A3B8" Margin="0,0,0,6" TextWrapping="Wrap" />
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0" Content="ROI 박스 사용 활성화" IsChecked="{Binding EnableRoi}" Foreground="#CBD5E1" FontSize="11" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Content="ROI 해제" Style="{StaticResource SecondaryButton}" Padding="6,2" FontSize="10" Command="{Binding ResetRoiCommand}" />
+                                </Grid>
+                                <Border Background="#0F172A" CornerRadius="4" Padding="6,4" Margin="0,0,0,12">
+                                    <TextBlock Text="{Binding RoiDisplayInfo, StringFormat={}상태: {0}}" FontSize="10" Foreground="#94A3B8" />
+                                </Border>
+
+                                <!-- Interactive Include / Exclude Brushes -->
+                                <TextBlock Text="🖌️ 살리기(초록) / 지우기(빨강) 브러시" FontSize="11" FontWeight="Bold" Foreground="#34D399" Margin="0,0,0,4" />
+                                <TextBlock Text="미리보기 화면 위에서 마우스로 문질러 특정 부분을 강제로 살리거나 지웁니다." FontSize="10" Foreground="#94A3B8" Margin="0,0,0,6" TextWrapping="Wrap" />
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="칠한 지점: " FontSize="10" Foreground="#94A3B8" />
+                                        <TextBlock Text="{Binding BrushStrokeCount, StringFormat={}{0}개}" FontSize="10" FontWeight="Bold" Foreground="#38BDF8" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="브러시 초기화" Style="{StaticResource SecondaryButton}" Padding="6,2" FontSize="10" Command="{Binding ClearBrushStrokesCommand}" />
+                                </Grid>
+
+                                <Rectangle Height="1" Fill="#334155" Margin="0,4,0,10" />
+
+                                <!-- Secondary Key Color (e.g. Ground Shadow Removal) -->
+                                <TextBlock Text="🎯 2차 배경 / 바닥 그림자 제거 (Secondary Key)" FontSize="11" FontWeight="Bold" Foreground="#F59E0B" Margin="0,0,0,4" />
+                                <TextBlock Text="바닥 그림자나 그라데이션을 2차 기준색으로 지정하여 추가 제거합니다." FontSize="10" Foreground="#94A3B8" Margin="0,0,0,6" TextWrapping="Wrap" />
+
+                                <CheckBox Content="2차 배경 / 그림자 제거 켜기" IsChecked="{Binding EnableSecondaryKey}" Foreground="#CBD5E1" FontSize="11" Margin="0,0,0,8" />
+
+                                <Grid Margin="0,0,0,8" Visibility="{Binding EnableSecondaryKey, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Height="24" CornerRadius="4" BorderBrush="#475569" BorderThickness="1"
+                                            Background="{Binding SecondaryKeyColor, Converter={StaticResource ColorToBrush}}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding SecondaryKeyColor, StringFormat={}{0}}" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Button Grid.Column="2" Content="🎯 스포이트 추출" Style="{StaticResource SecondaryButton}" Padding="6,2" FontSize="10"
+                                            Command="{Binding ToggleToolCommand}">
+                                        <Button.CommandParameter>
+                                            <m:MattingToolMode>SecondaryColorPicker</m:MattingToolMode>
+                                        </Button.CommandParameter>
+                                    </Button>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,4" Visibility="{Binding EnableSecondaryKey, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="2차 색상 허용 오차" FontSize="10" Foreground="#94A3B8" />
+                                    <TextBlock Grid.Column="1" Text="{Binding SecondaryTolerance, StringFormat={}{0:F2}}" FontSize="10" FontWeight="Bold" Foreground="#F59E0B" />
+                                </Grid>
+                                <Slider Value="{Binding SecondaryTolerance}" Minimum="0.01" Maximum="0.50" SmallChange="0.01" LargeChange="0.05"
+                                        Visibility="{Binding EnableSecondaryKey, Converter={StaticResource BoolToVis}}" Margin="0,0,0,4" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 3. Mask Edge Fine-Tuning Filters -->
+                        <TextBlock Text="3. 테두리 &amp; 마스크 정밀 보정 (Mask Fine-Tuning)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16">
+                            <StackPanel>
+                                <!-- Erode / Choke (Eat away white fringe outline) -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="테두리 깎기/확장 (Erode / Choke)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding MaskErodeDilate, StringFormat={}{0}px}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <TextBlock Text="💡 음수(-)로 설정 시 테두리의 흰색 잔여선(Fringe)을 안쪽으로 깎아냅니다." FontSize="9" Foreground="#94A3B8" Margin="0,0,0,4" />
+                                <Slider Value="{Binding MaskErodeDilate}" Minimum="-10" Maximum="10" SmallChange="1" LargeChange="2" Margin="0,0,0,10" />
+
+                                <!-- Feather (Edge Blur Softness) -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="경계면 부드러움 (Edge Feather)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding MaskFeather, StringFormat={}{0}px}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <Slider Value="{Binding MaskFeather}" Minimum="0" Maximum="20" SmallChange="1" LargeChange="2" Margin="0,0,0,10" />
+
+                                <!-- Mask Contrast -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="마스크 대비 (Mask Contrast)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding MaskContrast, StringFormat={}{0:F1}x}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <Slider Value="{Binding MaskContrast}" Minimum="0.5" Maximum="3.0" SmallChange="0.1" LargeChange="0.5" Margin="0,0,0,10" />
+
+                                <!-- Mask Threshold Cutoff -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="희미한 티끌 제거 (Threshold Cutoff)" FontSize="11" Foreground="#CBD5E1" />
+                                    <TextBlock Grid.Column="1" Text="{Binding MaskThreshold, StringFormat={}{0:F2}}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" />
+                                </Grid>
+                                <Slider Value="{Binding MaskThreshold}" Minimum="0.0" Maximum="0.5" SmallChange="0.02" LargeChange="0.05" Margin="0,0,0,10" />
+
+                                <Button Content="보정 필터 초기화" Style="{StaticResource SecondaryButton}" Padding="6,4" FontSize="10" Command="{Binding ResetMaskFiltersCommand}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 4. Background Replacement Selection -->
+                        <TextBlock Text="4. 배경 교체 및 합성 (Background)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
                         <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,16">
                             <StackPanel>
                                 <RadioButton Content="투명 배경 (Transparent Alpha)" Style="{StaticResource TabRadioButton}" Margin="0,0,0,6"
@@ -553,8 +727,8 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 3. Export Formats -->
-                        <TextBlock Text="3. 내보내기 포맷 (Export Format)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
+                        <!-- 5. Export Formats -->
+                        <TextBlock Text="5. 내보내기 포맷 (Export Format)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,6" />
                         <Border Background="#1E293B" CornerRadius="8" Padding="12" Margin="0,0,0,20">
                             <StackPanel>
                                 <TextBlock Text="비디오 내보내기 포맷" FontSize="11" Foreground="#CBD5E1" Margin="0,0,0,4" />

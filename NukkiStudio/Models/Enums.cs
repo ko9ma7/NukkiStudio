@@ -47,6 +47,16 @@ public enum ImageExportFormat
     AlphaMaskPng       // 8-bit Grayscale Alpha Matte PNG
 }
 
+public enum MattingToolMode
+{
+    None,
+    ColorPicker,           // Primary background key color eyedropper
+    SecondaryColorPicker,  // Secondary / shadow key color eyedropper
+    RoiBox,                // Crop / isolate subject bounding box
+    IncludeBrush,          // Paint foreground (Alpha = 255)
+    ExcludeBrush           // Paint background removal (Alpha = 0)
+}
+
 public record VideoMetadata(
     int Width,
     int Height,
