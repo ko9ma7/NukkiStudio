@@ -185,21 +185,37 @@ public class OnnxMattingEngine : IMattingEngine, IDisposable
 
             bool isModnet = _currentModelPath?.Contains("modnet", StringComparison.OrdinalIgnoreCase) == true;
 
+            // 1. Bilinear downsampling of RGBA to model dimensions [inW, inH]
             fixed (byte* pBuf = buffer)
             {
                 for (int y = 0; y < inH; y++)
                 {
-                    int srcY = Math.Clamp((int)(y * yRatio), 0, height - 1);
-                    int srcRow = srcY * width * 4;
+                    float srcY = y * yRatio;
+                    int y0 = Math.Clamp((int)srcY, 0, height - 1);
+                    int y1 = Math.Clamp(y0 + 1, 0, height - 1);
+                    float wy = srcY - y0;
+
+                    int row0 = y0 * width * 4;
+                    int row1 = y1 * width * 4;
 
                     for (int x = 0; x < inW; x++)
                     {
-                        int srcX = Math.Clamp((int)(x * xRatio), 0, width - 1);
-                        int idx = srcRow + srcX * 4;
+                        float srcX = x * xRatio;
+                        int x0 = Math.Clamp((int)srcX, 0, width - 1);
+                        int x1 = Math.Clamp(x0 + 1, 0, width - 1);
+                        float wx = srcX - x0;
 
-                        float r = pBuf[idx];
-                        float g = pBuf[idx + 1];
-                        float b = pBuf[idx + 2];
+                        int idx00 = row0 + x0 * 4;
+                        int idx10 = row0 + x1 * 4;
+                        int idx01 = row1 + x0 * 4;
+                        int idx11 = row1 + x1 * 4;
+
+                        float r = (pBuf[idx00] * (1 - wx) + pBuf[idx10] * wx) * (1 - wy) +
+                                  (pBuf[idx01] * (1 - wx) + pBuf[idx11] * wx) * wy;
+                        float g = (pBuf[idx00 + 1] * (1 - wx) + pBuf[idx10 + 1] * wx) * (1 - wy) +
+                                  (pBuf[idx01 + 1] * (1 - wx) + pBuf[idx11 + 1] * wx) * wy;
+                        float b = (pBuf[idx00 + 2] * (1 - wx) + pBuf[idx10 + 2] * wx) * (1 - wy) +
+                                  (pBuf[idx01 + 2] * (1 - wx) + pBuf[idx11 + 2] * wx) * wy;
 
                         if (isModnet)
                         {
@@ -227,7 +243,7 @@ public class OnnxMattingEngine : IMattingEngine, IDisposable
             using var results = _session.Run(inputs);
             var outputTensor = results.First().AsTensor<float>();
 
-            // Rescale output mask [1, 1, inH, inW] back to [width * height]
+            // 2. High-Quality Bilinear upsampling of output mask to original dimensions
             byte[] targetMask = new byte[width * height];
             float outXRatio = (float)inW / width;
             float outYRatio = (float)inH / height;
@@ -236,15 +252,27 @@ public class OnnxMattingEngine : IMattingEngine, IDisposable
             {
                 for (int y = 0; y < height; y++)
                 {
-                    int modY = Math.Clamp((int)(y * outYRatio), 0, inH - 1);
+                    float srcY = y * outYRatio;
+                    int y0 = Math.Clamp((int)srcY, 0, inH - 1);
+                    int y1 = Math.Clamp(y0 + 1, 0, inH - 1);
+                    float wy = srcY - y0;
                     int targetRow = y * width;
 
                     for (int x = 0; x < width; x++)
                     {
-                        int modX = Math.Clamp((int)(x * outXRatio), 0, inW - 1);
-                        float val = outputTensor[0, 0, modY, modX];
+                        float srcX = x * outXRatio;
+                        int x0 = Math.Clamp((int)srcX, 0, inW - 1);
+                        int x1 = Math.Clamp(x0 + 1, 0, inW - 1);
+                        float wx = srcX - x0;
 
-                        // Clamp sigmoid probability [0, 1]
+                        float v00 = outputTensor[0, 0, y0, x0];
+                        float v10 = outputTensor[0, 0, y0, x1];
+                        float v01 = outputTensor[0, 0, y1, x0];
+                        float v11 = outputTensor[0, 0, y1, x1];
+
+                        float val = (v00 * (1 - wx) + v10 * wx) * (1 - wy) +
+                                    (v01 * (1 - wx) + v11 * wx) * wy;
+
                         float alphaNorm = Math.Clamp(val, 0.0f, 1.0f);
                         pMask[targetRow + x] = (byte)(alphaNorm * 255.0f);
                     }

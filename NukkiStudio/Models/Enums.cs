@@ -17,8 +17,15 @@ public enum ProcessingStatus
 
 public enum MattingMode
 {
-    ChromaKey,   // Real-time green/blue screen keying with tolerance and spill suppression
-    AiNeural     // AI Deep Learning Matting (RMBG-1.4, MODNet, U2Net via ONNX)
+    AiNeural,    // AI Deep Learning Matting (U2Net, RMBG-1.4, etc. via ONNX) - 100% Offline & Free
+    WebCloud,    // Web Cloud AI Matting (Remove.bg API, HuggingFace Inference API, etc.)
+    ChromaKey    // Real-time green/blue screen keying with tolerance and spill suppression
+}
+
+public enum WebMattingProvider
+{
+    RemoveBg,       // remove.bg REST API (World standard for web e-commerce & photos)
+    CustomEndpoint  // Custom REST API endpoint (HuggingFace / local rembg HTTP server)
 }
 
 public enum BackgroundType

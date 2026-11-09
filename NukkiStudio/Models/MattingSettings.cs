@@ -59,6 +59,11 @@ public class MattingSettings
     public VideoExportFormat VideoFormat { get; set; } = VideoExportFormat.ProRes4444_Mov;
     public ImageExportFormat ImageFormat { get; set; } = ImageExportFormat.PngTransparent;
 
+    // Web Cloud Matting parameters
+    public WebMattingProvider WebProvider { get; set; } = WebMattingProvider.RemoveBg;
+    public string WebApiKey { get; set; } = "";
+    public string WebEndpointUrl { get; set; } = "https://api.remove.bg/v1.0/removebg";
+
     // Video output parameters
     public int OutputWidth { get; set; } = 0; // 0 = Keep original
     public int OutputHeight { get; set; } = 0;

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -16,6 +17,7 @@ public partial class MainViewModel : ObservableObject
     private readonly FFmpegService _ffmpegService;
     private readonly ChromaKeyMattingEngine _chromaEngine;
     private readonly OnnxMattingEngine _onnxEngine;
+    private readonly WebCloudMattingEngine _webCloudEngine;
     private readonly ModelManager _modelManager;
     private readonly DialogService _dialogService;
     private CancellationTokenSource? _processingCts;
@@ -102,6 +104,19 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private double _modelDownloadProgress;
+
+    // Web Cloud Matting (remove.bg / Web API)
+    [ObservableProperty]
+    private string _webApiKey = "";
+
+    [ObservableProperty]
+    private string _webEndpointUrl = "https://api.remove.bg/v1.0/removebg";
+
+    [ObservableProperty]
+    private WebMattingProvider _selectedWebProvider = WebMattingProvider.RemoveBg;
+
+    [ObservableProperty]
+    private string _webStatusMessage = "";
 
     // Interactive Preview
     [ObservableProperty]
@@ -223,13 +238,22 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private int _protectedPointsCount;
 
+    private static readonly string SettingsFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "NukkiStudio",
+        "appsettings.json"
+    );
+
     public MainViewModel()
     {
         _ffmpegService = new FFmpegService();
         _chromaEngine = new ChromaKeyMattingEngine();
         _onnxEngine = new OnnxMattingEngine();
+        _webCloudEngine = new WebCloudMattingEngine();
         _modelManager = new ModelManager();
         _dialogService = new DialogService();
+
+        LoadPersistedSettings();
 
         OutputDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
@@ -298,6 +322,52 @@ public partial class MainViewModel : ObservableObject
     partial void OnEnableDefringeChanged(bool value) => UpdateLivePreview();
     partial void OnDefringeRadiusChanged(int value) => UpdateLivePreview();
     partial void OnMagicWandToleranceChanged(double value) => UpdateLivePreview();
+    partial void OnWebApiKeyChanged(string value) => SavePersistedSettings();
+    partial void OnWebEndpointUrlChanged(string value) => SavePersistedSettings();
+    partial void OnSelectedWebProviderChanged(WebMattingProvider value) => UpdateLivePreview();
+
+    private void LoadPersistedSettings()
+    {
+        try
+        {
+            if (File.Exists(SettingsFilePath))
+            {
+                var json = File.ReadAllText(SettingsFilePath);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("WebApiKey", out var keyEl))
+                {
+                    WebApiKey = keyEl.GetString() ?? "";
+                }
+                if (doc.RootElement.TryGetProperty("WebEndpointUrl", out var urlEl))
+                {
+                    WebEndpointUrl = urlEl.GetString() ?? "https://api.remove.bg/v1.0/removebg";
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void SavePersistedSettings()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(SettingsFilePath)!;
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            var obj = new { WebApiKey, WebEndpointUrl };
+            File.WriteAllText(SettingsFilePath, System.Text.Json.JsonSerializer.Serialize(obj));
+        }
+        catch { }
+    }
+
+    public IMattingEngine GetEngineForMode(MattingMode mode)
+    {
+        return mode switch
+        {
+            MattingMode.WebCloud => _webCloudEngine,
+            MattingMode.AiNeural when _onnxEngine.IsAvailable => _onnxEngine,
+            _ => _chromaEngine
+        };
+    }
 
     partial void OnZoomScaleChanged(double value)
     {
@@ -418,22 +488,15 @@ public partial class MainViewModel : ObservableObject
         switch (preset)
         {
             case QuickPresetMode.StudioFigurine:
-                // Best for white figurine / product on white/gray studio background
-                SelectedMode = MattingMode.ChromaKey;
-                ContiguousOnly = true;
-                Tolerance = 0.22;
-                Smoothness = 0.08;
-                SpillSuppression = 0.20;
-                EnableSecondaryKey = true;
-                SecondaryKeyColor = Color.FromRgb(215, 215, 215);
-                SecondaryTolerance = 0.16;
-                MaskErodeDilate = -2; // Choke fringe outline by 2px
+                // Best for white figurine / product on white/gray studio background (AI prevents white hat/clothes from being removed!)
+                SelectedMode = MattingMode.AiNeural;
+                MaskErodeDilate = -1; // Subtle 1px edge choke
                 MaskFeather = 1;      // 1px anti-aliasing
-                MaskContrast = 1.35;
-                MaskThreshold = 0.05;
+                MaskContrast = 1.25;
+                MaskThreshold = 0.03;
                 EnableDefringe = true;
                 DefringeRadius = 2;
-                StatusMessage = "🧸 스튜디오 피규어/제품 프리셋 적용 (외곽 잔여 흰색 깎기, 바닥 그림자 제거, 엣지 복원)";
+                StatusMessage = "🧸 스튜디오 피규어/제품 프리셋 적용 (AI 시맨틱 피사체 인식, 흰색 옷/모자 완전 보존, 테두리 디프린지)";
                 break;
 
             case QuickPresetMode.PortraitHair:
@@ -819,22 +882,8 @@ public partial class MainViewModel : ObservableObject
                 if (bgPixels != null) ImageProcessor.SwapRedBlue(bgPixels, width, height);
             }
 
-            if (SelectedMode == MattingMode.ChromaKey)
-            {
-                _chromaEngine.ProcessRgbaBuffer(pixels, width, height, currentSettings, bgPixels);
-            }
-            else
-            {
-                if (_onnxEngine.IsAvailable)
-                {
-                    _onnxEngine.ProcessRgbaBuffer(pixels, width, height, currentSettings, bgPixels);
-                }
-                else
-                {
-                    // Fallback to ChromaKey if ONNX not yet loaded
-                    _chromaEngine.ProcessRgbaBuffer(pixels, width, height, currentSettings, bgPixels);
-                }
-            }
+            IMattingEngine engine = GetEngineForMode(SelectedMode);
+            engine.ProcessRgbaBuffer(pixels, width, height, currentSettings, bgPixels);
 
             // Convert back to BGRA for WPF display
             ImageProcessor.SwapRedBlue(pixels, width, height);
@@ -899,6 +948,59 @@ public partial class MainViewModel : ObservableObject
             SelectedBgType = BackgroundType.CustomImage;
             UpdateLivePreview();
         }
+    }
+
+    [RelayCommand]
+    public async Task TestWebConnectionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(WebApiKey))
+        {
+            _dialogService.ShowInfo("API 키 필요", "remove.bg API 키를 먼저 입력해주세요.");
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "remove.bg 웹 API 연결 확인 중...";
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.remove.bg/v1.0/account");
+            req.Headers.Add("X-Api-Key", WebApiKey.Trim());
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var resp = await client.SendAsync(req);
+            if (resp.IsSuccessStatusCode)
+            {
+                StatusMessage = "✅ remove.bg 웹 API 연결 성공!";
+                WebStatusMessage = "✅ API 연결 성공! 웹사이트와 동일한 품질로 누끼가 처리됩니다.";
+                _dialogService.ShowInfo("연결 성공", "remove.bg API와 성공적으로 연결되었습니다.\n웹사이트와 100% 동일한 고품질 누끼가 자동 적용됩니다.");
+                UpdateLivePreview();
+            }
+            else
+            {
+                var err = await resp.Content.ReadAsStringAsync();
+                StatusMessage = $"❌ API 연결 실패: {resp.StatusCode}";
+                WebStatusMessage = $"❌ 연결 실패: {resp.StatusCode}";
+                _dialogService.ShowInfo("연결 실패", $"API 키가 올바르지 않거나 오류가 발생했습니다: {err}");
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ 웹 연결 오류: {ex.Message}";
+            WebStatusMessage = $"❌ 오류: {ex.Message}";
+            _dialogService.ShowInfo("연결 오류", $"웹 서버 연결 중 오류가 발생했습니다: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    public void OpenWebApiKeyUrl()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://www.remove.bg/api#api-key",
+                UseShellExecute = true
+            });
+        }
+        catch { }
     }
 
     [RelayCommand]
@@ -1057,9 +1159,7 @@ public partial class MainViewModel : ObservableObject
                 if (bgPixels != null) ImageProcessor.SwapRedBlue(bgPixels, width, height);
             }
 
-            IMattingEngine engine = settings.Mode == MattingMode.AiNeural && _onnxEngine.IsAvailable
-                ? _onnxEngine
-                : _chromaEngine;
+            IMattingEngine engine = GetEngineForMode(settings.Mode);
 
             engine.ProcessRgbaBuffer(pixels, width, height, settings, bgPixels);
             ImageProcessor.SwapRedBlue(pixels, width, height);
@@ -1104,9 +1204,7 @@ public partial class MainViewModel : ObservableObject
         string outPath = Path.Combine(OutputDirectory, outName);
         item.OutputPath = outPath;
 
-        IMattingEngine engine = settings.Mode == MattingMode.AiNeural && _onnxEngine.IsAvailable
-            ? _onnxEngine
-            : _chromaEngine;
+        IMattingEngine engine = GetEngineForMode(settings.Mode);
 
         var progress = new Progress<(long frameIndex, long totalFrames, double fps, BitmapSource? preview)>(p =>
         {
@@ -1220,6 +1318,9 @@ public partial class MainViewModel : ObservableObject
             MagicWandPoints = MagicWandPoints.ToList(),
             LassoPolygons = LassoPolygons.ToList(),
             BrushStrokes = BrushStrokes.ToList(),
+            WebProvider = SelectedWebProvider,
+            WebApiKey = WebApiKey,
+            WebEndpointUrl = WebEndpointUrl,
             CustomBgColor = CustomBgColor,
             CustomBgImagePath = CustomBgImagePath,
             VideoFormat = SelectedVideoFormat,

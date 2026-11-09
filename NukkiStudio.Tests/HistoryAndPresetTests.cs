@@ -51,4 +51,42 @@ public class HistoryAndPresetTests
         var settingsGreen = new MattingSettings { QuickPreset = QuickPresetMode.GreenScreen };
         Assert.True(settingsGreen.SpillSuppression >= 0.5);
     }
+
+    [Fact]
+    public void WebCloudMattingEngine_ThrowsHelpfulError_WhenApiKeyMissing()
+    {
+        var engine = new WebCloudMattingEngine();
+        var settings = new MattingSettings
+        {
+            Mode = MattingMode.WebCloud,
+            WebProvider = WebMattingProvider.RemoveBg,
+            WebApiKey = "" // Empty key
+        };
+
+        byte[] buffer = new byte[16]; // 2x2
+        var ex = Assert.Throws<System.InvalidOperationException>(() =>
+        {
+            engine.ComputeAlphaMask(buffer, 2, 2, settings);
+        });
+
+        Assert.Contains("Remove.bg API 키가 등록되지 않았습니다", ex.Message);
+    }
+
+    [Fact]
+    public void GetEngineForMode_SelectsAppropriateEngine()
+    {
+        var vm = new MainViewModel();
+
+        var aiEngine = vm.GetEngineForMode(MattingMode.AiNeural);
+        Assert.NotNull(aiEngine);
+        Assert.Contains("AI", aiEngine.Name);
+
+        var webEngine = vm.GetEngineForMode(MattingMode.WebCloud);
+        Assert.NotNull(webEngine);
+        Assert.Contains("Web Cloud", webEngine.Name);
+
+        var chromaEngine = vm.GetEngineForMode(MattingMode.ChromaKey);
+        Assert.NotNull(chromaEngine);
+        Assert.Contains("Chroma", chromaEngine.Name);
+    }
 }
