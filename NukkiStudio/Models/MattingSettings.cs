@@ -41,6 +41,20 @@ public class MattingSettings
     public string SelectedModelPath { get; set; } = "";
     public bool UseGpuAcceleration { get; set; } = true;
 
+    // Quick Preset Profile
+    public QuickPresetMode QuickPreset { get; set; } = QuickPresetMode.Custom;
+
+    // Edge Defringe / Decontamination (Removes white halo reflection from edge pixels)
+    public bool EnableDefringe { get; set; } = true;
+    public int DefringeRadius { get; set; } = 2; // 1 ~ 5px
+
+    // Magic Wand Seed Points
+    public double MagicWandTolerance { get; set; } = 0.15;
+    public List<NukkiStudio.Services.MagicWandPoint> MagicWandPoints { get; set; } = new();
+
+    // Lasso Polygons
+    public List<NukkiStudio.Services.LassoPolygon> LassoPolygons { get; set; } = new();
+
     // Export formats
     public VideoExportFormat VideoFormat { get; set; } = VideoExportFormat.ProRes4444_Mov;
     public ImageExportFormat ImageFormat { get; set; } = ImageExportFormat.PngTransparent;
@@ -57,6 +71,8 @@ public class MattingSettings
         var clone = (MattingSettings)MemberwiseClone();
         clone.ProtectedPoints = new List<System.Windows.Point>(ProtectedPoints);
         clone.BrushStrokes = new List<NukkiStudio.Services.BrushStrokePoint>(BrushStrokes);
+        clone.MagicWandPoints = new List<NukkiStudio.Services.MagicWandPoint>(MagicWandPoints);
+        clone.LassoPolygons = LassoPolygons.Select(l => new NukkiStudio.Services.LassoPolygon(new List<System.Windows.Point>(l.Points), l.IsInclude)).ToList();
         return clone;
     }
 }

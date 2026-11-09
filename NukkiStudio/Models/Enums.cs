@@ -54,7 +54,20 @@ public enum MattingToolMode
     SecondaryColorPicker,  // Secondary / shadow key color eyedropper
     RoiBox,                // Crop / isolate subject bounding box
     IncludeBrush,          // Paint foreground (Alpha = 255)
-    ExcludeBrush           // Paint background removal (Alpha = 0)
+    ExcludeBrush,          // Paint background removal (Alpha = 0)
+    MagicWandErase,        // Smart Magic Wand: click connected background to erase (Alpha = 0)
+    MagicWandKeep,         // Smart Magic Wand: click connected subject region to keep (Alpha = 255)
+    LassoInclude,          // Polygon / freehand lasso: surround subject to protect (Alpha = 255)
+    LassoExclude           // Polygon / freehand lasso: surround region to delete (Alpha = 0)
+}
+
+public enum QuickPresetMode
+{
+    Custom,
+    StudioFigurine,    // White/gray studio product & figurine (anti-halo, exterior choke, shadow remover)
+    PortraitHair,      // Human portrait & hair matting (AI neural, soft edges, hair detail)
+    GreenScreen,       // Video chroma green/blue screen
+    GraphicLogo        // High-contrast clean logo/text
 }
 
 public record VideoMetadata(

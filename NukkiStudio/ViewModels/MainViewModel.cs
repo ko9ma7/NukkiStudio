@@ -131,6 +131,55 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private int _brushStrokeCount;
 
+    // Magic Wand Seed Points
+    public ObservableCollection<MagicWandPoint> MagicWandPoints { get; } = new();
+
+    [ObservableProperty]
+    private int _magicWandPointCount;
+
+    [ObservableProperty]
+    private double _magicWandTolerance = 0.15;
+
+    // Lasso Polygons
+    public ObservableCollection<LassoPolygon> LassoPolygons { get; } = new();
+
+    [ObservableProperty]
+    private int _lassoPolygonCount;
+
+    // Quick Smart Presets
+    [ObservableProperty]
+    private QuickPresetMode _selectedPreset = QuickPresetMode.Custom;
+
+    // Edge Defringe & Color Decontamination
+    [ObservableProperty]
+    private bool _enableDefringe = true;
+
+    [ObservableProperty]
+    private int _defringeRadius = 2; // 1 ~ 5px
+
+    // Canvas Zoom & Pan
+    [ObservableProperty]
+    private double _zoomScale = 1.0;
+
+    [ObservableProperty]
+    private double _panOffsetX = 0.0;
+
+    [ObservableProperty]
+    private double _panOffsetY = 0.0;
+
+    [ObservableProperty]
+    private string _zoomText = "100%";
+
+    // Undo / Redo Stacks
+    private readonly Stack<MattingHistoryState> _undoStack = new();
+    private readonly Stack<MattingHistoryState> _redoStack = new();
+
+    [ObservableProperty]
+    private bool _canUndo;
+
+    [ObservableProperty]
+    private bool _canRedo;
+
     [ObservableProperty]
     private bool _enableRoi;
 
@@ -246,6 +295,14 @@ public partial class MainViewModel : ObservableObject
     partial void OnSecondaryKeyColorChanged(Color value) => UpdateLivePreview();
     partial void OnSecondaryToleranceChanged(double value) => UpdateLivePreview();
     partial void OnEnableRoiChanged(bool value) => UpdateLivePreview();
+    partial void OnEnableDefringeChanged(bool value) => UpdateLivePreview();
+    partial void OnDefringeRadiusChanged(int value) => UpdateLivePreview();
+    partial void OnMagicWandToleranceChanged(double value) => UpdateLivePreview();
+
+    partial void OnZoomScaleChanged(double value)
+    {
+        ZoomText = $"{Math.Round(value * 100)}%";
+    }
 
     partial void OnActiveToolChanged(MattingToolMode value)
     {
@@ -258,8 +315,206 @@ public partial class MainViewModel : ObservableObject
             MattingToolMode.RoiBox => "🔲 관심 영역(ROI) 박스: 남길 피사체 주변을 마우스로 드래그하여 사각형으로 지정하세요.",
             MattingToolMode.IncludeBrush => "🟢 살리기 브러시: 날아간 피사체(모자, 인형, 손 등)를 마우스로 칠해 100% 복원하세요.",
             MattingToolMode.ExcludeBrush => "🔴 지우기 브러시: 미처 제거되지 않은 배경, 얼룩, 그림자 등을 문질러 지우세요.",
+            MattingToolMode.MagicWandErase => "🪄 마술봉(배경 제거): 지우고 싶은 배경 영역(바닥, 구석, 그림자 등)을 클릭하면 연결된 배경이 자동 삭제됩니다.",
+            MattingToolMode.MagicWandKeep => "🪄 마술봉(피사체 복원): 실수로 지워진 피사체 부위를 클릭하면 연결된 전경이 자동 복원됩니다.",
+            MattingToolMode.LassoInclude => "🪢 올가미(피사체 보호): 피사체 외곽을 자유롭게 둘러싸서 내부를 100% 안전하게 보호합니다.",
+            MattingToolMode.LassoExclude => "🪢 올가미(영역 삭제): 불필요한 배경이나 주변 물체를 올가미로 묶어 일괄 삭제합니다.",
             _ => "준비 완료. 마우스로 도구를 선택하거나 영상을 변환하세요."
         };
+    }
+
+    public void RecordHistoryState(string description = "")
+    {
+        var state = new MattingHistoryState(
+            BrushStrokes,
+            MagicWandPoints,
+            LassoPolygons,
+            RoiRect,
+            EnableRoi,
+            description
+        );
+        _undoStack.Push(state);
+        _redoStack.Clear();
+        UpdateUndoRedoState();
+    }
+
+    private void UpdateUndoRedoState()
+    {
+        CanUndo = _undoStack.Count > 0;
+        CanRedo = _redoStack.Count > 0;
+    }
+
+    [RelayCommand]
+    public void Undo()
+    {
+        if (_undoStack.Count == 0) return;
+
+        var currentState = new MattingHistoryState(
+            BrushStrokes,
+            MagicWandPoints,
+            LassoPolygons,
+            RoiRect,
+            EnableRoi,
+            "Current"
+        );
+        _redoStack.Push(currentState);
+
+        var previousState = _undoStack.Pop();
+        RestoreHistoryState(previousState);
+        UpdateUndoRedoState();
+        StatusMessage = $"실행 취소됨: {previousState.Description}";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+
+        var currentState = new MattingHistoryState(
+            BrushStrokes,
+            MagicWandPoints,
+            LassoPolygons,
+            RoiRect,
+            EnableRoi,
+            "Current"
+        );
+        _undoStack.Push(currentState);
+
+        var nextState = _redoStack.Pop();
+        RestoreHistoryState(nextState);
+        UpdateUndoRedoState();
+        StatusMessage = $"다시 실행됨: {nextState.Description}";
+        UpdateLivePreview();
+    }
+
+    private void RestoreHistoryState(MattingHistoryState state)
+    {
+        BrushStrokes.Clear();
+        foreach (var s in state.BrushStrokes) BrushStrokes.Add(s);
+        BrushStrokeCount = BrushStrokes.Count;
+
+        MagicWandPoints.Clear();
+        foreach (var w in state.MagicWandPoints) MagicWandPoints.Add(w);
+        MagicWandPointCount = MagicWandPoints.Count;
+
+        LassoPolygons.Clear();
+        foreach (var l in state.LassoPolygons) LassoPolygons.Add(l);
+        LassoPolygonCount = LassoPolygons.Count;
+
+        RoiRect = state.RoiRect;
+        EnableRoi = state.EnableRoi;
+        RoiDisplayInfo = (EnableRoi && RoiRect.HasValue)
+            ? $"{Math.Round(RoiRect.Value.Width)} x {Math.Round(RoiRect.Value.Height)} px"
+            : "미지정 (전체 영역)";
+    }
+
+    [RelayCommand]
+    public void ApplyPreset(QuickPresetMode preset)
+    {
+        RecordHistoryState($"프리셋 변경 ({preset})");
+        SelectedPreset = preset;
+
+        switch (preset)
+        {
+            case QuickPresetMode.StudioFigurine:
+                // Best for white figurine / product on white/gray studio background
+                SelectedMode = MattingMode.ChromaKey;
+                ContiguousOnly = true;
+                Tolerance = 0.22;
+                Smoothness = 0.08;
+                SpillSuppression = 0.20;
+                EnableSecondaryKey = true;
+                SecondaryKeyColor = Color.FromRgb(215, 215, 215);
+                SecondaryTolerance = 0.16;
+                MaskErodeDilate = -2; // Choke fringe outline by 2px
+                MaskFeather = 1;      // 1px anti-aliasing
+                MaskContrast = 1.35;
+                MaskThreshold = 0.05;
+                EnableDefringe = true;
+                DefringeRadius = 2;
+                StatusMessage = "🧸 스튜디오 피규어/제품 프리셋 적용 (외곽 잔여 흰색 깎기, 바닥 그림자 제거, 엣지 복원)";
+                break;
+
+            case QuickPresetMode.PortraitHair:
+                // Best for human portrait with fine hair strands
+                SelectedMode = MattingMode.AiNeural;
+                MaskErodeDilate = 0;
+                MaskFeather = 2;
+                MaskContrast = 1.10;
+                MaskThreshold = 0.02;
+                SpillSuppression = 0.50;
+                EnableDefringe = true;
+                DefringeRadius = 2;
+                StatusMessage = "👤 인물 & 헤어 프리셋 적용 (AI 고정밀 신경망, 자연스러운 머리카락 페더링)";
+                break;
+
+            case QuickPresetMode.GreenScreen:
+                // Standard green/blue chroma screen video
+                SelectedMode = MattingMode.ChromaKey;
+                KeyColor = Color.FromRgb(0, 255, 0);
+                Tolerance = 0.28;
+                Smoothness = 0.12;
+                SpillSuppression = 0.70;
+                MaskErodeDilate = -1;
+                MaskFeather = 1;
+                MaskContrast = 1.0;
+                EnableDefringe = true;
+                DefringeRadius = 2;
+                StatusMessage = "🟩 그린스크린 크로마키 프리셋 적용 (녹색 반사광 억제 및 부드러운 합성)";
+                break;
+
+            case QuickPresetMode.GraphicLogo:
+                // Flat logos, graphics, icons
+                Tolerance = 0.18;
+                MaskThreshold = 0.25;
+                MaskContrast = 2.5;
+                MaskFeather = 0;
+                MaskErodeDilate = 0;
+                EnableDefringe = false;
+                StatusMessage = "📐 로고 & 그래픽 프리셋 적용 (선명한 흑백 알파 컷오프)";
+                break;
+        }
+
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ZoomIn()
+    {
+        ZoomScale = Math.Min(8.0, Math.Round(ZoomScale * 1.25, 2));
+    }
+
+    [RelayCommand]
+    public void ZoomOut()
+    {
+        ZoomScale = Math.Max(0.25, Math.Round(ZoomScale / 1.25, 2));
+    }
+
+    [RelayCommand]
+    public void ZoomFit()
+    {
+        ZoomScale = 1.0;
+        PanOffsetX = 0.0;
+        PanOffsetY = 0.0;
+    }
+
+    [RelayCommand]
+    public void Zoom100()
+    {
+        ZoomScale = 1.0;
+    }
+
+    [RelayCommand]
+    public void Zoom200()
+    {
+        ZoomScale = 2.0;
+    }
+
+    [RelayCommand]
+    public void Zoom400()
+    {
+        ZoomScale = 4.0;
     }
 
     [RelayCommand]
@@ -271,15 +526,60 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     public void ClearBrushStrokes()
     {
+        RecordHistoryState("브러시 전체 초기화");
         BrushStrokes.Clear();
         BrushStrokeCount = 0;
         StatusMessage = "브러시 스트로크가 모두 초기화되었습니다.";
         UpdateLivePreview();
     }
 
+    public void AddMagicWandPoint(double x, double y, bool isInclude)
+    {
+        RecordHistoryState(isInclude ? "마술봉 영역 살리기" : "마술봉 영역 지우기");
+        MagicWandPoints.Add(new MagicWandPoint(x, y, MagicWandTolerance, isInclude));
+        MagicWandPointCount = MagicWandPoints.Count;
+        StatusMessage = isInclude
+            ? $"🪄 마술봉: ({Math.Round(x)}, {Math.Round(y)}) 주변 연결 피사체 복원"
+            : $"🪄 마술봉: ({Math.Round(x)}, {Math.Round(y)}) 주변 연결 배경 제거";
+        UpdateLivePreview();
+    }
+
+    public void AddLassoPolygon(List<Point> points, bool isInclude)
+    {
+        if (points.Count < 3) return;
+        RecordHistoryState(isInclude ? "올가미 피사체 보호" : "올가미 영역 삭제");
+        LassoPolygons.Add(new LassoPolygon(points, isInclude));
+        LassoPolygonCount = LassoPolygons.Count;
+        StatusMessage = isInclude
+            ? $"🪢 올가미: {points.Count}개 정점 피사체 보호 적용"
+            : $"🪢 올가미: {points.Count}개 정점 영역 삭제 적용";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ClearMagicWandPoints()
+    {
+        RecordHistoryState("마술봉 포인트 전체 초기화");
+        MagicWandPoints.Clear();
+        MagicWandPointCount = 0;
+        StatusMessage = "마술봉 지정 포인트가 초기화되었습니다.";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ClearLassoPolygons()
+    {
+        RecordHistoryState("올가미 다각형 전체 초기화");
+        LassoPolygons.Clear();
+        LassoPolygonCount = 0;
+        StatusMessage = "올가미 지정 다각형이 초기화되었습니다.";
+        UpdateLivePreview();
+    }
+
     [RelayCommand]
     public void ResetRoi()
     {
+        RecordHistoryState("관심 영역(ROI) 해제");
         RoiRect = null;
         EnableRoi = false;
         RoiDisplayInfo = "미지정 (전체 영역)";
@@ -294,6 +594,8 @@ public partial class MainViewModel : ObservableObject
         MaskFeather = 0;
         MaskThreshold = 0.0;
         MaskContrast = 1.0;
+        EnableDefringe = true;
+        DefringeRadius = 2;
         StatusMessage = "마스크 보정 필터가 기본값으로 초기화되었습니다.";
         UpdateLivePreview();
     }
@@ -301,8 +603,13 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     public void ResetAllFineTuning()
     {
+        RecordHistoryState("모든 세부 선택 및 마스크 초기화");
         BrushStrokes.Clear();
         BrushStrokeCount = 0;
+        MagicWandPoints.Clear();
+        MagicWandPointCount = 0;
+        LassoPolygons.Clear();
+        LassoPolygonCount = 0;
         RoiRect = null;
         EnableRoi = false;
         RoiDisplayInfo = "미지정 (전체 영역)";
@@ -310,6 +617,8 @@ public partial class MainViewModel : ObservableObject
         MaskFeather = 0;
         MaskThreshold = 0.0;
         MaskContrast = 1.0;
+        EnableDefringe = true;
+        DefringeRadius = 2;
         EnableSecondaryKey = false;
         ClearProtectedPoints();
         StatusMessage = "모든 세부 선택 및 마스크 필터가 초기화되었습니다.";
@@ -335,6 +644,7 @@ public partial class MainViewModel : ObservableObject
 
     public void SetRoi(Rect rect)
     {
+        RecordHistoryState("관심 영역(ROI) 박스 설정");
         RoiRect = rect;
         EnableRoi = true;
         RoiDisplayInfo = $"{Math.Round(rect.Width)} x {Math.Round(rect.Height)} px";
@@ -903,6 +1213,12 @@ public partial class MainViewModel : ObservableObject
             MaskFeather = MaskFeather,
             MaskThreshold = MaskThreshold,
             MaskContrast = MaskContrast,
+            EnableDefringe = EnableDefringe,
+            DefringeRadius = DefringeRadius,
+            QuickPreset = SelectedPreset,
+            MagicWandTolerance = MagicWandTolerance,
+            MagicWandPoints = MagicWandPoints.ToList(),
+            LassoPolygons = LassoPolygons.ToList(),
             BrushStrokes = BrushStrokes.ToList(),
             CustomBgColor = CustomBgColor,
             CustomBgImagePath = CustomBgImagePath,

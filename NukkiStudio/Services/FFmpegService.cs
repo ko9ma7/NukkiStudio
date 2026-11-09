@@ -97,12 +97,14 @@ public class FFmpegService
         var miseInstalls = Path.Combine(userProfile, "AppData", "Local", "mise", "installs", "ffmpeg");
         if (Directory.Exists(miseInstalls))
         {
-            var allCandidates = Directory.GetFiles(miseInstalls, "ffmpeg.exe", SearchOption.AllDirectories);
-            // Prioritize directories containing Library\bin or bin where DLLs live, avoiding .mise-bins shims
+            // Specifically exclude .mise-bins shims because they lack required runtime DLLs
+            var allCandidates = Directory.GetFiles(miseInstalls, "ffmpeg.exe", SearchOption.AllDirectories)
+                .Where(b => !b.Contains(".mise-bins", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
             var sortedCandidates = allCandidates
                 .OrderByDescending(b => b.Contains("Library\\bin", StringComparison.OrdinalIgnoreCase))
                 .ThenByDescending(b => b.Contains("\\bin\\", StringComparison.OrdinalIgnoreCase))
-                .ThenBy(b => b.Contains(".mise-bins", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             foreach (var candidate in sortedCandidates)
@@ -119,6 +121,7 @@ public class FFmpegService
                     else
                     {
                         var probeBins = Directory.GetFiles(miseInstalls, "ffprobe.exe", SearchOption.AllDirectories)
+                            .Where(b => !b.Contains(".mise-bins", StringComparison.OrdinalIgnoreCase))
                             .OrderByDescending(b => b.Contains("Library\\bin", StringComparison.OrdinalIgnoreCase))
                             .ToList();
                         FFprobePath = probeBins.Count > 0 ? probeBins[0] : "ffprobe.exe";

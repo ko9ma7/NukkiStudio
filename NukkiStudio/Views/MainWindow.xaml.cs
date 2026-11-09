@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,6 +22,14 @@ public partial class MainWindow : Window
     private bool _isPaintingBrush;
     private Point _lastPaintedPixelPos;
 
+    private bool _isPanning;
+    private Point _panStartScreenPos;
+    private double _panInitialOffsetX;
+    private double _panInitialOffsetY;
+
+    private bool _isDrawingLasso;
+    private readonly List<Point> _currentLassoPoints = new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -30,6 +39,27 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateSplitClip();
+    }
+
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+            {
+                if (ViewModel.CanRedo) ViewModel.Redo();
+            }
+            else
+            {
+                if (ViewModel.CanUndo) ViewModel.Undo();
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            if (ViewModel.CanRedo) ViewModel.Redo();
+            e.Handled = true;
+        }
     }
 
     private void Window_DragOver(object sender, DragEventArgs e)
@@ -178,6 +208,18 @@ public partial class MainWindow : Window
 
     private void OverlayCanvas_MouseDown(object sender, MouseButtonEventArgs e)
     {
+        // 0. Pan Handling (Middle Click OR Left Click while Spacebar held down)
+        if (e.ChangedButton == MouseButton.Middle || (e.ChangedButton == MouseButton.Left && Keyboard.IsKeyDown(Key.Space)))
+        {
+            _isPanning = true;
+            _panStartScreenPos = e.GetPosition(this);
+            _panInitialOffsetX = ViewModel.PanOffsetX;
+            _panInitialOffsetY = ViewModel.PanOffsetY;
+            OverlayCanvas.CaptureMouse();
+            Cursor = Cursors.SizeAll;
+            return;
+        }
+
         if (e.ChangedButton != MouseButton.Left) return;
         var canvasPos = e.GetPosition(OverlayCanvas);
 
@@ -210,7 +252,31 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 3. Include / Exclude Brush Mode
+        // 3. Magic Wand Mode (1-Click Smart Edge-Aware Keep or Erase)
+        if (ViewModel.ActiveTool == MattingToolMode.MagicWandErase || ViewModel.ActiveTool == MattingToolMode.MagicWandKeep)
+        {
+            bool isErase = (ViewModel.ActiveTool == MattingToolMode.MagicWandErase);
+            ViewModel.AddMagicWandPoint(pixelX, pixelY, isErase);
+            return;
+        }
+
+        // 4. Lasso Polygon Mode (Surround region to include or exclude)
+        if (ViewModel.ActiveTool == MattingToolMode.LassoInclude || ViewModel.ActiveTool == MattingToolMode.LassoExclude)
+        {
+            _isDrawingLasso = true;
+            _currentLassoPoints.Clear();
+            _currentLassoPoints.Add(new Point(pixelX, pixelY));
+            ActiveLassoVisual.Points.Clear();
+            ActiveLassoVisual.Points.Add(canvasPos);
+            ActiveLassoVisual.Stroke = (ViewModel.ActiveTool == MattingToolMode.LassoInclude)
+                ? new SolidColorBrush(Color.FromRgb(52, 211, 153)) // Green
+                : new SolidColorBrush(Color.FromRgb(248, 113, 113)); // Red
+            ActiveLassoVisual.Visibility = Visibility.Visible;
+            OverlayCanvas.CaptureMouse();
+            return;
+        }
+
+        // 5. Include / Exclude Brush Mode
         if (ViewModel.ActiveTool == MattingToolMode.IncludeBrush || ViewModel.ActiveTool == MattingToolMode.ExcludeBrush)
         {
             _isPaintingBrush = true;
@@ -223,10 +289,19 @@ public partial class MainWindow : Window
 
     private void OverlayCanvas_MouseMove(object sender, MouseEventArgs e)
     {
+        // 0. Active Pan dragging
+        if (_isPanning)
+        {
+            var curScreenPos = e.GetPosition(this);
+            ViewModel.PanOffsetX = _panInitialOffsetX + (curScreenPos.X - _panStartScreenPos.X);
+            ViewModel.PanOffsetY = _panInitialOffsetY + (curScreenPos.Y - _panStartScreenPos.Y);
+            return;
+        }
+
         var canvasPos = e.GetPosition(OverlayCanvas);
         bool insideImage = TryGetImageCoordinates(canvasPos, out double pixelX, out double pixelY, out double scale);
 
-        // Update cursor indicator
+        // Update cursor indicator for brushes
         if (insideImage && (ViewModel.ActiveTool == MattingToolMode.IncludeBrush || ViewModel.ActiveTool == MattingToolMode.ExcludeBrush))
         {
             double brushScreenDiameter = Math.Max(6, ViewModel.BrushSize * 2.0 * scale);
@@ -260,26 +335,59 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Handle Active Painting for Brushes
+        // Handle Active Lasso Polygon outline drawing
+        if (_isDrawingLasso && insideImage)
+        {
+            if (_currentLassoPoints.Count > 0)
+            {
+                var lastPt = _currentLassoPoints[^1];
+                double dx = pixelX - lastPt.X;
+                double dy = pixelY - lastPt.Y;
+                if (dx * dx + dy * dy >= 9.0) // Sample every ~3 pixels for smooth curves
+                {
+                    _currentLassoPoints.Add(new Point(pixelX, pixelY));
+                    ActiveLassoVisual.Points.Add(canvasPos);
+                }
+            }
+            return;
+        }
+
+        // Handle Active Continuous Painting for Brushes (Interpolate steps to eliminate gaps)
         if (_isPaintingBrush && insideImage)
         {
             double dx = pixelX - _lastPaintedPixelPos.X;
             double dy = pixelY - _lastPaintedPixelPos.Y;
-            double distSq = dx * dx + dy * dy;
-            double minSpacing = Math.Max(4.0, ViewModel.BrushSize * 0.4);
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+            double step = Math.Max(2.0, ViewModel.BrushSize * 0.35);
 
-            // Interpolate / stamp if mouse moved enough
-            if (distSq >= minSpacing * minSpacing)
+            if (dist >= step)
             {
-                _lastPaintedPixelPos = new Point(pixelX, pixelY);
+                int steps = (int)Math.Ceiling(dist / step);
                 bool isInclude = (ViewModel.ActiveTool == MattingToolMode.IncludeBrush);
-                ViewModel.AddBrushStroke(pixelX, pixelY, isInclude);
+                for (int s = 1; s <= steps; s++)
+                {
+                    double t = (double)s / steps;
+                    double interpX = _lastPaintedPixelPos.X + dx * t;
+                    double interpY = _lastPaintedPixelPos.Y + dy * t;
+                    ViewModel.AddBrushStroke(interpX, interpY, isInclude);
+                }
+                _lastPaintedPixelPos = new Point(pixelX, pixelY);
             }
         }
     }
 
     private void OverlayCanvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        // 0. End Pan
+        if (_isPanning)
+        {
+            _isPanning = false;
+            OverlayCanvas.ReleaseMouseCapture();
+            Cursor = Cursors.Arrow;
+            return;
+        }
+
+        // 1. End ROI Drag
         if (_isDraggingRoi)
         {
             _isDraggingRoi = false;
@@ -303,11 +411,42 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 2. End Lasso
+        if (_isDrawingLasso)
+        {
+            _isDrawingLasso = false;
+            OverlayCanvas.ReleaseMouseCapture();
+            ActiveLassoVisual.Visibility = Visibility.Collapsed;
+
+            if (_currentLassoPoints.Count >= 3)
+            {
+                bool isInclude = (ViewModel.ActiveTool == MattingToolMode.LassoInclude);
+                ViewModel.AddLassoPolygon(_currentLassoPoints, isInclude);
+            }
+            _currentLassoPoints.Clear();
+            ActiveLassoVisual.Points.Clear();
+            return;
+        }
+
+        // 3. End Brush
         if (_isPaintingBrush)
         {
             _isPaintingBrush = false;
             OverlayCanvas.ReleaseMouseCapture();
         }
+    }
+
+    private void OverlayCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Delta > 0)
+        {
+            ViewModel.ZoomIn();
+        }
+        else if (e.Delta < 0)
+        {
+            ViewModel.ZoomOut();
+        }
+        e.Handled = true;
     }
 
     private void OverlayCanvas_MouseLeave(object sender, MouseEventArgs e)

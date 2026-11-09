@@ -206,6 +206,56 @@ public class ChromaKeyMattingEngine : IMattingEngine
         bool[] isExterior = new bool[totalPixels];
         if (settings.ContiguousOnly)
         {
+            // Build impenetrable barrier map from protected points, include brush strokes, and include lasso polygons
+            bool[] isBarrier = new bool[totalPixels];
+
+            if (settings.ProtectedPoints != null && settings.ProtectedPoints.Count > 0)
+            {
+                double rSq = settings.ProtectRadius * settings.ProtectRadius;
+                foreach (var pt in settings.ProtectedPoints)
+                {
+                    int minX = Math.Max(0, (int)(pt.X - settings.ProtectRadius));
+                    int maxX = Math.Min(width - 1, (int)(pt.X + settings.ProtectRadius));
+                    int minY = Math.Max(0, (int)(pt.Y - settings.ProtectRadius));
+                    int maxY = Math.Min(height - 1, (int)(pt.Y + settings.ProtectRadius));
+                    for (int y = minY; y <= maxY; y++)
+                    {
+                        int row = y * width;
+                        double dy = y - pt.Y;
+                        double dySq = dy * dy;
+                        for (int x = minX; x <= maxX; x++)
+                        {
+                            double dx = x - pt.X;
+                            if (dx * dx + dySq <= rSq) isBarrier[row + x] = true;
+                        }
+                    }
+                }
+            }
+
+            if (settings.BrushStrokes != null && settings.BrushStrokes.Count > 0)
+            {
+                foreach (var stroke in settings.BrushStrokes)
+                {
+                    if (!stroke.IsInclude) continue;
+                    double rSq = stroke.Radius * stroke.Radius;
+                    int minX = Math.Max(0, (int)(stroke.X - stroke.Radius));
+                    int maxX = Math.Min(width - 1, (int)(stroke.X + stroke.Radius));
+                    int minY = Math.Max(0, (int)(stroke.Y - stroke.Radius));
+                    int maxY = Math.Min(height - 1, (int)(stroke.Y + stroke.Radius));
+                    for (int y = minY; y <= maxY; y++)
+                    {
+                        int row = y * width;
+                        double dy = y - stroke.Y;
+                        double dySq = dy * dy;
+                        for (int x = minX; x <= maxX; x++)
+                        {
+                            double dx = x - stroke.X;
+                            if (dx * dx + dySq <= rSq) isBarrier[row + x] = true;
+                        }
+                    }
+                }
+            }
+
             int[] queue = new int[totalPixels];
             int head = 0, tail = 0;
 
@@ -214,12 +264,12 @@ public class ChromaKeyMattingEngine : IMattingEngine
             {
                 int topIdx = x;
                 int botIdx = (height - 1) * width + x;
-                if (isCandidateBg[topIdx] && !isExterior[topIdx])
+                if (isCandidateBg[topIdx] && !isExterior[topIdx] && !isBarrier[topIdx])
                 {
                     isExterior[topIdx] = true;
                     queue[tail++] = topIdx;
                 }
-                if (isCandidateBg[botIdx] && !isExterior[botIdx])
+                if (isCandidateBg[botIdx] && !isExterior[botIdx] && !isBarrier[botIdx])
                 {
                     isExterior[botIdx] = true;
                     queue[tail++] = botIdx;
@@ -231,63 +281,86 @@ public class ChromaKeyMattingEngine : IMattingEngine
             {
                 int leftIdx = y * width;
                 int rightIdx = y * width + (width - 1);
-                if (isCandidateBg[leftIdx] && !isExterior[leftIdx])
+                if (isCandidateBg[leftIdx] && !isExterior[leftIdx] && !isBarrier[leftIdx])
                 {
                     isExterior[leftIdx] = true;
                     queue[tail++] = leftIdx;
                 }
-                if (isCandidateBg[rightIdx] && !isExterior[rightIdx])
+                if (isCandidateBg[rightIdx] && !isExterior[rightIdx] && !isBarrier[rightIdx])
                 {
                     isExterior[rightIdx] = true;
                     queue[tail++] = rightIdx;
                 }
             }
 
-            // 4-way BFS expansion
-            while (head < tail)
+            // 4-way BFS expansion with boundary gradient stopping
+            fixed (byte* pBuffer = buffer)
             {
-                int curr = queue[head++];
-                int cx = curr % width;
-                int cy = curr / width;
+                while (head < tail)
+                {
+                    int curr = queue[head++];
+                    int cx = curr % width;
+                    int cy = curr / width;
 
-                // Up
-                if (cy > 0)
-                {
-                    int n = curr - width;
-                    if (isCandidateBg[n] && !isExterior[n])
+                    int curR = pBuffer[curr * 4];
+                    int curG = pBuffer[curr * 4 + 1];
+                    int curB = pBuffer[curr * 4 + 2];
+
+                    // Up
+                    if (cy > 0)
                     {
-                        isExterior[n] = true;
-                        queue[tail++] = n;
+                        int n = curr - width;
+                        if (isCandidateBg[n] && !isExterior[n] && !isBarrier[n])
+                        {
+                            int diff = Math.Abs(pBuffer[n * 4] - curR) + Math.Abs(pBuffer[n * 4 + 1] - curG) + Math.Abs(pBuffer[n * 4 + 2] - curB);
+                            if (diff < 45)
+                            {
+                                isExterior[n] = true;
+                                queue[tail++] = n;
+                            }
+                        }
                     }
-                }
-                // Down
-                if (cy < height - 1)
-                {
-                    int s = curr + width;
-                    if (isCandidateBg[s] && !isExterior[s])
+                    // Down
+                    if (cy < height - 1)
                     {
-                        isExterior[s] = true;
-                        queue[tail++] = s;
+                        int s = curr + width;
+                        if (isCandidateBg[s] && !isExterior[s] && !isBarrier[s])
+                        {
+                            int diff = Math.Abs(pBuffer[s * 4] - curR) + Math.Abs(pBuffer[s * 4 + 1] - curG) + Math.Abs(pBuffer[s * 4 + 2] - curB);
+                            if (diff < 45)
+                            {
+                                isExterior[s] = true;
+                                queue[tail++] = s;
+                            }
+                        }
                     }
-                }
-                // Left
-                if (cx > 0)
-                {
-                    int w = curr - 1;
-                    if (isCandidateBg[w] && !isExterior[w])
+                    // Left
+                    if (cx > 0)
                     {
-                        isExterior[w] = true;
-                        queue[tail++] = w;
+                        int w = curr - 1;
+                        if (isCandidateBg[w] && !isExterior[w] && !isBarrier[w])
+                        {
+                            int diff = Math.Abs(pBuffer[w * 4] - curR) + Math.Abs(pBuffer[w * 4 + 1] - curG) + Math.Abs(pBuffer[w * 4 + 2] - curB);
+                            if (diff < 45)
+                            {
+                                isExterior[w] = true;
+                                queue[tail++] = w;
+                            }
+                        }
                     }
-                }
-                // Right
-                if (cx < width - 1)
-                {
-                    int e = curr + 1;
-                    if (isCandidateBg[e] && !isExterior[e])
+                    // Right
+                    if (cx < width - 1)
                     {
-                        isExterior[e] = true;
-                        queue[tail++] = e;
+                        int e = curr + 1;
+                        if (isCandidateBg[e] && !isExterior[e] && !isBarrier[e])
+                        {
+                            int diff = Math.Abs(pBuffer[e * 4] - curR) + Math.Abs(pBuffer[e * 4 + 1] - curG) + Math.Abs(pBuffer[e * 4 + 2] - curB);
+                            if (diff < 45)
+                            {
+                                isExterior[e] = true;
+                                queue[tail++] = e;
+                            }
+                        }
                     }
                 }
             }
@@ -356,8 +429,8 @@ public class ChromaKeyMattingEngine : IMattingEngine
             }
         }
 
-        // Step 5: Advanced Mask Post-Processing (ROI crop, Brush strokes, Erode/Dilate, Feather, Contrast)
-        MaskPostProcessor.ApplyPostProcessing(mask, width, height, settings);
+        // Step 5: Advanced Mask Post-Processing (ROI crop, Lasso, Magic Wand, Brush strokes, Erode/Dilate, Feather, Defringe)
+        MaskPostProcessor.ApplyPostProcessing(mask, width, height, settings, buffer);
 
         return mask;
     }
