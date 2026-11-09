@@ -25,6 +25,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <conv:InverseBooleanConverter x:Key="InverseBool" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis" />
         <conv:StatusToColorConverter x:Key="StatusToColor" />
         <conv:EnumToBooleanConverter x:Key="EnumToBool" />
         <conv:EnumToVisibilityConverter x:Key="EnumToVis" />
@@ -341,6 +342,14 @@
 
                             <!-- Center: Interactive Tool Buttons -->
                             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <!-- Split View Compare Toggle -->
+                                <ToggleButton IsChecked="{Binding ShowSplitCompare}"
+                                              Style="{StaticResource TabToggleButton}" Padding="8,4" Margin="0,0,6,0" ToolTip="누끼와 원본을 나란히 분할 비교 (켜기/끄기)">
+                                    <TextBlock Text="👁️ 원본 비교" FontSize="11" FontWeight="SemiBold" Foreground="#38BDF8" />
+                                </ToggleButton>
+
+                                <Rectangle Width="1" Height="18" Fill="#334155" Margin="0,0,6,0" />
+
                                 <!-- Eyedroppers -->
                                 <ToggleButton IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBool}, ConverterParameter=ColorPicker}"
                                               Style="{StaticResource TabToggleButton}" Padding="6,4" Margin="0,0,3,0" ToolTip="화면에서 배경 기준색 직접 스포이트 추출">
@@ -461,7 +470,7 @@
                     </Border>
 
                     <!-- Split Position Slider -->
-                    <Grid Grid.Row="2" Margin="0,12,0,0">
+                    <Grid Grid.Row="2" Margin="0,12,0,0" Visibility="{Binding ShowSplitCompare, Converter={StaticResource BoolToVis}}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -481,8 +490,156 @@
             <Border Grid.Column="4" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1,0,0,0" Padding="16">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="누끼 및 내보내기 설정" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,16" />
+                        <TextBlock Text="누끼 및 내보내기 설정" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,12" />
 
+                        <!-- Mode Switch: Easy Mode vs Pro Mode -->
+                        <Border Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="3" Margin="0,0,0,16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <RadioButton Grid.Column="0" Content="⚡ 간편 모드 (추천)"
+                                             IsChecked="{Binding IsEasyMode}"
+                                             Style="{StaticResource TabRadioButton}" Margin="0,0,2,0" />
+                                <RadioButton Grid.Column="1" Content="🛠️ 전문가 모드 (Pro)"
+                                             IsChecked="{Binding IsEasyMode, Converter={StaticResource InverseBool}}"
+                                             Style="{StaticResource TabRadioButton}" Margin="2,0,0,0" />
+                            </Grid>
+                        </Border>
+
+                        <!-- ================= EASY MODE (Zero-Configuration, Ultra Simple) ================= -->
+                        <StackPanel Visibility="{Binding IsEasyMode, Converter={StaticResource BoolToVis}}">
+                            <!-- 1. AI Auto Matting Status Card -->
+                            <Border Background="#1E1B4B" BorderBrush="#6366F1" BorderThickness="1.5" CornerRadius="10" Padding="14" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="🤖 AI 자동 누끼 분리" FontSize="13" FontWeight="Bold" Foreground="#A5B4FC" />
+                                        <Border Background="#10B981" CornerRadius="4" Padding="5,1" Margin="8,0,0,0">
+                                            <TextBlock Text="자동 완성" FontSize="9" FontWeight="Bold" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="💡 파일을 올리면 AI가 피사체 형태를 스스로 인식하여 배경을 100% 자동 분리합니다."
+                                               FontSize="11" Foreground="#C7D2FE" TextWrapping="Wrap" LineHeight="16" Margin="0,0,0,6" />
+                                    <TextBlock Text="흰색 배경의 흰 옷/인형/제품도 색상 구분 없이 완벽하게 보존됩니다."
+                                               FontSize="10" Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" Fill="#10B981" Margin="0,0,6,0" />
+                                            <TextBlock Text="온디바이스 고속 AI 동작 중" FontSize="10" Foreground="#6EE7B7" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="⚡ AI 다시 분석" Style="{StaticResource SecondaryButton}" Padding="8,4" FontSize="10"
+                                                Command="{Binding UpdateLivePreviewCommand}" ToolTip="현재 선택된 이미지를 AI로 즉시 다시 분석합니다" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 2. One-Click Background Selection -->
+                            <TextBlock Text="1. 배경 색상 선택 (클릭 즉시 반영)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,8" />
+                            <Border Background="#1E293B" CornerRadius="10" Padding="12" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <!-- Transparent Alpha -->
+                                        <Button Grid.Column="0" Style="{StaticResource SecondaryButton}" Padding="8,10" Margin="0,0,3,0"
+                                                Command="{Binding SetEasyBgTransparentCommand}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="⬛⬜ 투명 배경" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="#38BDF8" />
+                                                <TextBlock Text="기본 알파 누끼" FontSize="9" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                        <!-- Chroma Green -->
+                                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Padding="8,10" Margin="3,0,0,0"
+                                                Command="{Binding SetEasyBgGreenCommand}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="🟩 그린스크린" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="#34D399" />
+                                                <TextBlock Text="영상 편집/합성용" FontSize="9" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <!-- White Background -->
+                                        <Button Grid.Column="0" Style="{StaticResource SecondaryButton}" Padding="8,10" Margin="0,0,3,0"
+                                                Command="{Binding SetEasyBgWhiteCommand}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="⬜ 깔끔한 화이트" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="#F8FAFC" />
+                                                <TextBlock Text="쇼핑몰/상품 사진용" FontSize="9" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                        <!-- Custom Image -->
+                                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Padding="8,10" Margin="3,0,0,0"
+                                                Command="{Binding SetEasyBgCustomImageCommand}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="🖼️ 내 배경 합성" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="#FBBF24" />
+                                                <TextBlock Text="원하는 사진/배경" FontSize="9" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 3. Simple Magic Touch-up -->
+                            <TextBlock Text="2. 쉬운 원클릭 수정 (터치업)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,8" />
+                            <Border Background="#1E293B" CornerRadius="10" Padding="12" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="혹시 덜 빠진 배경이나 잘못 지워진 부분이 있나요? 버튼을 누르고 화면의 해당 부위를 콕 찍어주세요:"
+                                               FontSize="10" Foreground="#CBD5E1" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Style="{StaticResource SecondaryButton}" Padding="8,10" Margin="0,0,3,0"
+                                                Command="{Binding ActivateEasyEraseWandCommand}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="🪄 덜 빠진 배경 지우기" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="#F87171" />
+                                                <TextBlock Text="남은 얼룩/배경 콕 찍기" FontSize="9" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Padding="8,10" Margin="3,0,0,0"
+                                                Command="{Binding ActivateEasyKeepWandCommand}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="🪄 날아간 피사체 살리기" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="#34D399" />
+                                                <TextBlock Text="모자/옷/얼굴 콕 찍기" FontSize="9" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+
+                                    <Button Content="↺ 수동 수정 내용 초기화" Style="{StaticResource SecondaryButton}" Padding="6,4" FontSize="10"
+                                            HorizontalAlignment="Right" Command="{Binding ResetEasyTouchUpsCommand}" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 4. Quick Save Current File (1-Click) -->
+                            <TextBlock Text="3. 지금 바로 저장하기 (Quick Save)" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" Margin="0,0,0,8" />
+                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <Button Content="💾 누끼 파일 저장하기 (1-클릭 즉시 저장)" Style="{StaticResource PrimaryButton}" Height="48" FontSize="14"
+                                            Command="{Binding QuickSaveCurrentItemCommand}" Margin="0,0,0,8" />
+                                    <TextBlock Text="💡 현재 보고 있는 결과물이 투명 배경(PNG/ProRes)으로 즉시 저장 폴더에 저장됩니다."
+                                               FontSize="10" Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <Button Content="📁 저장 폴더 열기" Style="{StaticResource SecondaryButton}" Height="34" FontSize="11"
+                                            Command="{Binding OpenOutputFolderCommand}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ================= PRO MODE (Full Technical Parameters) ================= -->
+                        <StackPanel Visibility="{Binding IsEasyMode, Converter={StaticResource InverseBoolToVis}}">
                         <!-- 0. Quick 1-Click Turnkey Smart Presets -->
                         <Border Background="#1E1B4B" BorderBrush="#6366F1" BorderThickness="1.5" CornerRadius="8" Padding="12" Margin="0,0,0,16">
                             <StackPanel>
@@ -974,6 +1131,7 @@
                         <Button Content="취소 (Cancel)" Style="{StaticResource SecondaryButton}" Height="36"
                                 Command="{Binding CancelProcessingCommand}"
                                 Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </Border>

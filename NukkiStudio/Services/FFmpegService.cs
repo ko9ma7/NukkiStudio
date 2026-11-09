@@ -16,8 +16,13 @@ public class FFmpegService
 {
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint SetErrorMode(uint uMode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetThreadErrorMode(uint dwNewMode, out uint lpOldMode);
+
     private const uint SEM_FAILCRITICALERRORS = 0x0001;
     private const uint SEM_NOGPFAULTERRORBOX = 0x0002;
+    private const uint SEM_NOOPENFILEERRORBOX = 0x8000;
 
     public string FFmpegPath { get; private set; } = "ffmpeg.exe";
     public string FFprobePath { get; private set; } = "ffprobe.exe";
@@ -25,12 +30,18 @@ public class FFmpegService
 
     static FFmpegService()
     {
+        SuppressWindowsErrorDialogs();
+    }
+
+    private static void SuppressWindowsErrorDialogs()
+    {
         try
         {
             if (OperatingSystem.IsWindows())
             {
                 // Suppress Windows system modal error dialogs when probing binaries with missing dynamic libraries
-                SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+                SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+                SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX, out _);
             }
         }
         catch { }
@@ -55,6 +66,16 @@ public class FFmpegService
         };
 
         var dir = Path.GetDirectoryName(binaryPath);
+        if (string.IsNullOrEmpty(dir))
+        {
+            var resolved = FindExecutableOnPath(binaryPath);
+            if (!string.IsNullOrEmpty(resolved))
+            {
+                psi.FileName = resolved;
+                dir = Path.GetDirectoryName(resolved);
+            }
+        }
+
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
             psi.WorkingDirectory = dir;
@@ -132,11 +153,21 @@ public class FFmpegService
             }
         }
 
-        // 3. Check if on system PATH
-        if (CheckBinaryAvailable("ffmpeg.exe"))
+        // 3. Check if on system PATH with safety sanitization
+        var pathFFmpeg = FindExecutableOnPath("ffmpeg.exe");
+        if (pathFFmpeg != null && CheckBinaryAvailable(pathFFmpeg))
         {
-            FFmpegPath = "ffmpeg.exe";
-            FFprobePath = "ffprobe.exe";
+            FFmpegPath = pathFFmpeg;
+            var candDir = Path.GetDirectoryName(pathFFmpeg)!;
+            var probeInSameDir = Path.Combine(candDir, "ffprobe.exe");
+            if (File.Exists(probeInSameDir))
+            {
+                FFprobePath = probeInSameDir;
+            }
+            else
+            {
+                FFprobePath = FindExecutableOnPath("ffprobe.exe") ?? "ffprobe.exe";
+            }
             IsFFmpegInstalled = true;
             return;
         }
@@ -144,10 +175,44 @@ public class FFmpegService
         IsFFmpegInstalled = false;
     }
 
+    public static string? FindExecutableOnPath(string exeName)
+    {
+        try
+        {
+            var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+            var paths = pathEnv.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var p in paths)
+            {
+                var full = Path.Combine(p, exeName);
+                if (File.Exists(full))
+                {
+                    // If candidate is inside a .mise-bins shim folder, look for the real binary with DLLs in Library\bin
+                    if (full.Contains(".mise-bins", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parentDir = Directory.GetParent(p)?.FullName;
+                        if (parentDir != null)
+                        {
+                            var libBin = Path.Combine(parentDir, "Library", "bin", exeName);
+                            if (File.Exists(libBin))
+                                return libBin;
+                        }
+                        // Skip bare .mise-bins shims that lack runtime DLLs
+                        continue;
+                    }
+                    return full;
+                }
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
     private static bool CheckBinaryAvailable(string binaryName)
     {
         try
         {
+            SuppressWindowsErrorDialogs();
             var psi = CreateProcessStartInfo(binaryName, "-version");
             using var proc = new Process { StartInfo = psi };
             proc.Start();

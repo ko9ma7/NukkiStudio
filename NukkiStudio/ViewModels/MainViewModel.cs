@@ -126,7 +126,16 @@ public partial class MainViewModel : ObservableObject
     private BitmapSource? _processedPreviewImage;
 
     [ObservableProperty]
-    private double _splitPosition = 50.0; // 0% to 100% split view
+    private bool _isEasyMode = true; // Easy Mode by default for zero-friction testing!
+
+    [ObservableProperty]
+    private bool _showSplitCompare = false; // Hide split divider by default (100% full cutout preview)
+
+    [ObservableProperty]
+    private bool _isShowingOriginal = false;
+
+    [ObservableProperty]
+    private double _splitPosition = 0.0; // 0% = 100% full cutout, 50% = split, 100% = original
 
     [ObservableProperty]
     private bool _isColorPickerActive;
@@ -326,6 +335,23 @@ public partial class MainViewModel : ObservableObject
     partial void OnWebEndpointUrlChanged(string value) => SavePersistedSettings();
     partial void OnSelectedWebProviderChanged(WebMattingProvider value) => UpdateLivePreview();
 
+    partial void OnIsEasyModeChanged(bool value)
+    {
+        if (value)
+        {
+            SelectedMode = MattingMode.AiNeural;
+            ShowSplitCompare = false;
+            SplitPosition = 0.0;
+        }
+        UpdateLivePreview();
+    }
+
+    partial void OnShowSplitCompareChanged(bool value)
+    {
+        SplitPosition = value ? 50.0 : 0.0;
+        UpdateLivePreview();
+    }
+
     private void LoadPersistedSettings()
     {
         try
@@ -361,12 +387,25 @@ public partial class MainViewModel : ObservableObject
 
     public IMattingEngine GetEngineForMode(MattingMode mode)
     {
-        return mode switch
+        if (mode == MattingMode.WebCloud)
+            return _webCloudEngine;
+
+        if (mode == MattingMode.AiNeural)
         {
-            MattingMode.WebCloud => _webCloudEngine,
-            MattingMode.AiNeural when _onnxEngine.IsAvailable => _onnxEngine,
-            _ => _chromaEngine
-        };
+            if (!_onnxEngine.IsAvailable && File.Exists(ModelManager.BuiltInModelPath))
+            {
+                try
+                {
+                    _onnxEngine.LoadModel(ModelManager.BuiltInModelPath, useGpu: true);
+                }
+                catch { }
+            }
+
+            if (_onnxEngine.IsAvailable)
+                return _onnxEngine;
+        }
+
+        return _chromaEngine;
     }
 
     partial void OnZoomScaleChanged(double value)
@@ -811,6 +850,14 @@ public partial class MainViewModel : ObservableObject
         {
             AutoDetectBackgroundColor(item.OriginalPreview);
         }
+
+        if (IsEasyMode)
+        {
+            SelectedMode = MattingMode.AiNeural;
+            ShowSplitCompare = false;
+            SplitPosition = 0.0;
+        }
+
         UpdateLivePreview();
     }
 
@@ -947,6 +994,132 @@ public partial class MainViewModel : ObservableObject
             CustomBgImagePath = file;
             SelectedBgType = BackgroundType.CustomImage;
             UpdateLivePreview();
+        }
+    }
+
+    [RelayCommand]
+    public void ToggleSplitCompare()
+    {
+        ShowSplitCompare = !ShowSplitCompare;
+        SplitPosition = ShowSplitCompare ? 50.0 : 0.0;
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ToggleShowOriginal()
+    {
+        IsShowingOriginal = !IsShowingOriginal;
+        SplitPosition = IsShowingOriginal ? 100.0 : (ShowSplitCompare ? 50.0 : 0.0);
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void SetEasyBgTransparent()
+    {
+        SelectedBgType = BackgroundType.Transparent;
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void SetEasyBgGreen()
+    {
+        SelectedBgType = BackgroundType.GreenScreen;
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void SetEasyBgWhite()
+    {
+        SelectedBgType = BackgroundType.CustomColor;
+        CustomBgColor = Colors.White;
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void SetEasyBgCustomImage()
+    {
+        SelectCustomBgImage();
+    }
+
+    [RelayCommand]
+    public void ActivateEasyEraseWand()
+    {
+        ActiveTool = MattingToolMode.MagicWandErase;
+        StatusMessage = "🪄 지우고 싶은 배경 영역을 클릭하세요 (연결된 배경이 한 번에 자동 삭제됩니다)";
+    }
+
+    [RelayCommand]
+    public void ActivateEasyKeepWand()
+    {
+        ActiveTool = MattingToolMode.MagicWandKeep;
+        StatusMessage = "🪄 살리고 싶은 피사체(모자, 얼굴, 옷 등)를 클릭하세요 (잘못 지워진 부분이 100% 복원됩니다)";
+    }
+
+    [RelayCommand]
+    public void ResetEasyTouchUps()
+    {
+        ClearMagicWandPoints();
+        ClearLassoPolygons();
+        ClearBrushStrokes();
+        UpdateLivePreview();
+        StatusMessage = "모든 수동 보정 내용이 초기화되었습니다.";
+    }
+
+    [RelayCommand]
+    public async Task QuickSaveCurrentItemAsync()
+    {
+        if (SelectedItem == null)
+        {
+            _dialogService.ShowInfo("저장 안내", "저장할 이미지 또는 영상 파일을 먼저 드래그하거나 추가해주세요.");
+            return;
+        }
+
+        try
+        {
+            IsProcessing = true;
+            OverallProgress = 10;
+            StatusMessage = $"'{SelectedItem.FileName}' 파일 저장 중...";
+
+            if (!Directory.Exists(OutputDirectory))
+            {
+                Directory.CreateDirectory(OutputDirectory);
+            }
+
+            var currentSettings = CreateCurrentSettings();
+
+            if (SelectedItem.Type == MediaType.Image)
+            {
+                await ProcessImageItemAsync(SelectedItem, currentSettings, CancellationToken.None);
+                SelectedItem.Status = ProcessingStatus.Completed;
+                SelectedItem.ProgressPercent = 100;
+                SelectedItem.StatusMessage = "저장 완료";
+                ProcessedPreviewImage = SelectedItem.ProcessedPreview;
+            }
+            else
+            {
+                if (!_ffmpegService.IsFFmpegInstalled)
+                {
+                    _dialogService.ShowError("FFmpeg 필요", "영상 저장을 위해 FFmpeg가 필요합니다.");
+                    return;
+                }
+                await ProcessVideoItemAsync(SelectedItem, currentSettings, CancellationToken.None);
+                SelectedItem.Status = ProcessingStatus.Completed;
+                SelectedItem.ProgressPercent = 100;
+                SelectedItem.StatusMessage = "저장 완료";
+            }
+
+            OverallProgress = 100;
+            StatusMessage = $"저장 완료: {Path.GetFileName(SelectedItem.OutputPath)}";
+            _dialogService.ShowInfo("저장 완료", $"누끼 파일이 성공적으로 저장되었습니다!\n\n저장 경로:\n{SelectedItem.OutputPath}");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"저장 실패: {ex.Message}";
+            _dialogService.ShowError("저장 오류", $"파일 저장 중 오류가 발생했습니다: {ex.Message}");
+        }
+        finally
+        {
+            IsProcessing = false;
         }
     }
 

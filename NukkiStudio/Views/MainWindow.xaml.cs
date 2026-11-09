@@ -126,6 +126,11 @@ public partial class MainWindow : Window
         SplitDividerLine.X2 = splitX;
         SplitDividerLine.Y2 = h;
 
+        // Hide divider line if split is at 0 (full cutout) or if ShowSplitCompare is false
+        SplitDividerLine.Visibility = (ViewModel.ShowSplitCompare && ViewModel.SplitPosition > 0 && ViewModel.SplitPosition < 100)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
         // Position confirmed ROI rectangle if enabled
         UpdateRoiVisualRect();
     }

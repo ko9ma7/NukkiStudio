@@ -89,4 +89,69 @@ public class HistoryAndPresetTests
         Assert.NotNull(chromaEngine);
         Assert.Contains("Chroma", chromaEngine.Name);
     }
+
+    [Fact]
+    public void EasyMode_DefaultsToTrue_FullCutoutPreviewWithoutSplitDivider()
+    {
+        var vm = new MainViewModel();
+
+        // 1. Zero-configuration Easy Mode must be active by default
+        Assert.True(vm.IsEasyMode);
+
+        // 2. Default to 100% full cutout preview (no 50/50 split line cutting subject in half)
+        Assert.False(vm.ShowSplitCompare);
+        Assert.Equal(0.0, vm.SplitPosition);
+
+        // 3. Toggling split compare should enable 50% split view
+        vm.ToggleSplitCompare();
+        Assert.True(vm.ShowSplitCompare);
+        Assert.Equal(50.0, vm.SplitPosition);
+
+        // 4. Toggling off should return to 100% full cutout
+        vm.ToggleSplitCompare();
+        Assert.False(vm.ShowSplitCompare);
+        Assert.Equal(0.0, vm.SplitPosition);
+    }
+
+    [Fact]
+    public void EasyMode_OneClickBackgroundButtons_UpdateSettings()
+    {
+        var vm = new MainViewModel();
+
+        vm.SetEasyBgGreenCommand.Execute(null);
+        Assert.Equal(BackgroundType.GreenScreen, vm.SelectedBgType);
+
+        vm.SetEasyBgWhiteCommand.Execute(null);
+        Assert.Equal(BackgroundType.CustomColor, vm.SelectedBgType);
+        Assert.Equal(Colors.White, vm.CustomBgColor);
+
+        vm.SetEasyBgTransparentCommand.Execute(null);
+        Assert.Equal(BackgroundType.Transparent, vm.SelectedBgType);
+    }
+
+    [Fact]
+    public void EasyMode_TouchUpWands_ActivateCorrectTools()
+    {
+        var vm = new MainViewModel();
+
+        vm.ActivateEasyEraseWandCommand.Execute(null);
+        Assert.Equal(MattingToolMode.MagicWandErase, vm.ActiveTool);
+
+        vm.ActivateEasyKeepWandCommand.Execute(null);
+        Assert.Equal(MattingToolMode.MagicWandKeep, vm.ActiveTool);
+
+        vm.ResetEasyTouchUpsCommand.Execute(null);
+        Assert.Empty(vm.MagicWandPoints);
+        Assert.Empty(vm.LassoPolygons);
+        Assert.Empty(vm.BrushStrokes);
+    }
+
+    [Fact]
+    public void FFmpegService_SanitizesAndLocatesBinariesSafely()
+    {
+        var service = new FFmpegService();
+        // Should not throw and should detect installed FFmpeg on this system
+        Assert.NotNull(service.FFmpegPath);
+        Assert.False(service.FFmpegPath.Contains(".mise-bins", System.StringComparison.OrdinalIgnoreCase));
+    }
 }
