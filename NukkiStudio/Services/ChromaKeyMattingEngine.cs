@@ -41,6 +41,8 @@ public class ChromaKeyMattingEngine : IMattingEngine
         {
             BackgroundType.GreenScreen => true,
             BackgroundType.CustomColor => true,
+            BackgroundType.Gradient when backgroundBuffer != null && backgroundBuffer.Length >= totalPixels * 4 => true,
+            BackgroundType.BlurOriginal when backgroundBuffer != null && backgroundBuffer.Length >= totalPixels * 4 => true,
             BackgroundType.CustomImage when backgroundBuffer != null && backgroundBuffer.Length >= totalPixels * 4 => true,
             _ => false
         };
@@ -121,7 +123,7 @@ public class ChromaKeyMattingEngine : IMattingEngine
                     byte targetBgG = bgG;
                     byte targetBgB = bgB;
 
-                    if (settings.BgType == BackgroundType.CustomImage && bgPtr != null)
+                    if (bgPtr != null)
                     {
                         targetBgR = bgPtr[i * 4];
                         targetBgG = bgPtr[i * 4 + 1];
@@ -138,6 +140,9 @@ public class ChromaKeyMattingEngine : IMattingEngine
                 }
             }
         }
+
+        // Apply visual styling (Color grading, Sticker stroke, etc.)
+        ImageProcessor.ApplySubjectEffects(buffer, width, height, settings);
     }
 
     public unsafe byte[] ComputeAlphaMask(

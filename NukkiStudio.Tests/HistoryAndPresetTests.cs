@@ -147,6 +147,80 @@ public class HistoryAndPresetTests
     }
 
     [Fact]
+    public void EasyMode_BlurAndGradientButtons_UpdateSettings()
+    {
+        var vm = new MainViewModel();
+
+        vm.SetEasyBgBlurCommand.Execute(null);
+        Assert.Equal(BackgroundType.BlurOriginal, vm.SelectedBgType);
+        Assert.True(vm.EnableBgBlur);
+
+        vm.SetEasyBgGradientCommand.Execute(null);
+        Assert.Equal(BackgroundType.Gradient, vm.SelectedBgType);
+    }
+
+    [Fact]
+    public void VisualEffects_ToggleStrokeAndShadow()
+    {
+        var vm = new MainViewModel();
+
+        Assert.False(vm.EnableStroke);
+        vm.ToggleStrokeCommand.Execute(null);
+        Assert.True(vm.EnableStroke);
+
+        Assert.False(vm.EnableShadow);
+        vm.ToggleShadowCommand.Execute(null);
+        Assert.True(vm.EnableShadow);
+    }
+
+    [Fact]
+    public void VideoTimeline_TrimControls_WorkAsExpected()
+    {
+        var vm = new MainViewModel
+        {
+            IsVideoLoaded = true,
+            VideoDuration = 10.0,
+            VideoCurrentTime = 3.5
+        };
+
+        vm.SetTrimStartCommand.Execute(null);
+        Assert.Equal(3.5, vm.VideoTrimStart);
+
+        vm.VideoCurrentTime = 8.0;
+        vm.SetTrimEndCommand.Execute(null);
+        Assert.Equal(8.0, vm.VideoTrimEnd);
+
+        vm.ResetTrimCommand.Execute(null);
+        Assert.Equal(0.0, vm.VideoTrimStart);
+        Assert.Equal(10.0, vm.VideoTrimEnd);
+    }
+
+    [Fact]
+    public void ImageProcessor_GradientAndBlurAndStroke_ExecuteSafely()
+    {
+        int w = 10;
+        int h = 10;
+        var grad = ImageProcessor.CreateGradientBackground(w, h, Colors.Black, Colors.White);
+        Assert.Equal(w * h * 4, grad.Length);
+
+        byte[] sampleRgba = new byte[w * h * 4];
+        for (int i = 0; i < sampleRgba.Length; i += 4)
+        {
+            sampleRgba[i] = 100;
+            sampleRgba[i + 1] = 150;
+            sampleRgba[i + 2] = 200;
+            sampleRgba[i + 3] = 255;
+        }
+
+        var blurred = ImageProcessor.CreateBlurredBackground(sampleRgba, w, h, 2);
+        Assert.Equal(sampleRgba.Length, blurred.Length);
+
+        // Run stroke without exceptions
+        ImageProcessor.ApplyStickerStroke(sampleRgba, w, h, 2, Colors.White);
+        Assert.NotNull(sampleRgba);
+    }
+
+    [Fact]
     public void FFmpegService_SanitizesAndLocatesBinariesSafely()
     {
         var service = new FFmpegService();

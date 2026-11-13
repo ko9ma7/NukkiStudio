@@ -31,6 +31,8 @@ public class WebCloudMattingEngine : IMattingEngine
         {
             BackgroundType.GreenScreen => true,
             BackgroundType.CustomColor => true,
+            BackgroundType.Gradient when backgroundBuffer != null && backgroundBuffer.Length >= width * height * 4 => true,
+            BackgroundType.BlurOriginal when backgroundBuffer != null && backgroundBuffer.Length >= width * height * 4 => true,
             BackgroundType.CustomImage when backgroundBuffer != null && backgroundBuffer.Length >= width * height * 4 => true,
             _ => false
         };
@@ -81,7 +83,7 @@ public class WebCloudMattingEngine : IMattingEngine
                     byte targetBgG = bgG;
                     byte targetBgB = bgB;
 
-                    if (settings.BgType == BackgroundType.CustomImage && bgPtr != null)
+                    if (bgPtr != null)
                     {
                         targetBgR = bgPtr[i * 4];
                         targetBgG = bgPtr[i * 4 + 1];
@@ -98,6 +100,9 @@ public class WebCloudMattingEngine : IMattingEngine
                 }
             }
         }
+
+        // Apply visual styling (Color grading, Sticker stroke, etc.)
+        ImageProcessor.ApplySubjectEffects(buffer, width, height, settings);
     }
 
     public byte[] ComputeAlphaMask(

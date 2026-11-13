@@ -10,6 +10,28 @@ public class MattingSettings
     public Color CustomBgColor { get; set; } = Colors.White;
     public string? CustomBgImagePath { get; set; }
 
+    // Subject Visual Effects
+    public bool EnableStroke { get; set; } = false;
+    public int StrokeThickness { get; set; } = 4; // 1 ~ 20px
+    public Color StrokeColor { get; set; } = Colors.White;
+
+    public bool EnableShadow { get; set; } = false;
+    public double ShadowBlur { get; set; } = 12.0;
+    public double ShadowOpacity { get; set; } = 0.5;
+    public double ShadowOffsetY { get; set; } = 8.0;
+    public Color ShadowColor { get; set; } = Colors.Black;
+
+    public bool EnableBgBlur { get; set; } = false;
+    public int BgBlurRadius { get; set; } = 15;
+
+    public double Brightness { get; set; } = 0.0; // -100 ~ +100
+    public double Contrast { get; set; } = 1.0; // 0.5 ~ 2.0
+    public double Saturation { get; set; } = 1.0; // 0.0 ~ 2.0
+
+    // Video Trimming
+    public double TrimStartTime { get; set; } = 0.0;
+    public double TrimEndTime { get; set; } = 0.0;
+
     // ChromaKey parameters
     public Color KeyColor { get; set; } = Color.FromRgb(0, 255, 0); // Default Pure Green #00FF00
     public double Tolerance { get; set; } = 0.28; // 0.0 ~ 1.0 (Color similarity threshold)

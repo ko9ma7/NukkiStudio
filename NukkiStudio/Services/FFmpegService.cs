@@ -387,6 +387,11 @@ public class FFmpegService
                 sb.Append($"-c:v libx264 -pix_fmt yuv420p -preset medium -crf 18 \"{outputPath}\"");
                 break;
 
+            case VideoExportFormat.AnimatedGif:
+                // Animated GIF with transparency
+                sb.Append($"-vf \"fps=15,split[s0][s1];[s0]palettegen=reserve_transparent=on:transparency_color=ffffff[p];[s1][p]paletteuse\" \"{outputPath}\"");
+                break;
+
             case VideoExportFormat.PngSequence:
                 // Sequence of PNG files
                 var framePattern = Path.Combine(outputPath, "frame_%05d.png");
@@ -419,9 +424,24 @@ public class FFmpegService
         {
             customBgBuffer = ImageProcessor.LoadResizedBackgroundBuffer(settings.CustomBgImagePath, width, height);
         }
+        else if (settings.BgType == BackgroundType.Gradient)
+        {
+            customBgBuffer = ImageProcessor.CreateGradientBackground(width, height, System.Windows.Media.Color.FromRgb(30, 41, 59), System.Windows.Media.Color.FromRgb(15, 23, 42));
+        }
 
-        // 1. Decoder process: streams raw RGBA frames to stdout
-        var decoderArgs = $"-i \"{inputVideoPath}\" -f rawvideo -pix_fmt rgba -";
+        // 1. Decoder process: streams raw RGBA frames to stdout with optional trimming
+        string trimArgs = "";
+        if (settings.TrimStartTime > 0)
+        {
+            trimArgs += $"-ss {settings.TrimStartTime.ToString("0.###", CultureInfo.InvariantCulture)} ";
+        }
+        if (settings.TrimEndTime > settings.TrimStartTime)
+        {
+            double dur = settings.TrimEndTime - settings.TrimStartTime;
+            trimArgs += $"-t {dur.ToString("0.###", CultureInfo.InvariantCulture)} ";
+        }
+
+        var decoderArgs = $"{trimArgs}-i \"{inputVideoPath}\" -f rawvideo -pix_fmt rgba -";
         var decoderPsi = CreateProcessStartInfo(FFmpegPath, decoderArgs);
         using var decoder = new Process { StartInfo = decoderPsi };
 
@@ -481,8 +501,14 @@ public class FFmpegService
                 frameIndex++;
                 fpsFrameCount++;
 
+                byte[]? activeBgBuffer = customBgBuffer;
+                if (settings.BgType == BackgroundType.BlurOriginal)
+                {
+                    activeBgBuffer = ImageProcessor.CreateBlurredBackground(frameBuffer, width, height, settings.BgBlurRadius);
+                }
+
                 // Apply Matting
-                mattingEngine.ProcessRgbaBuffer(frameBuffer, width, height, settings, customBgBuffer);
+                mattingEngine.ProcessRgbaBuffer(frameBuffer, width, height, settings, activeBgBuffer);
 
                 // Write to encoder
                 await encoderStream.WriteAsync(frameBuffer.AsMemory(0, frameBytes), cancellationToken);

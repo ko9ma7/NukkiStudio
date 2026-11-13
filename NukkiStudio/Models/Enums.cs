@@ -30,10 +30,12 @@ public enum WebMattingProvider
 
 public enum BackgroundType
 {
-    Transparent,  // Alpha channel preserved
-    GreenScreen,  // #00FF00 chroma green
-    CustomColor,  // Solid custom hex color
-    CustomImage   // Composite onto custom background image
+    Transparent,   // Alpha channel preserved
+    GreenScreen,   // #00FF00 chroma green
+    CustomColor,   // Solid custom hex color
+    Gradient,      // Modern studio radial/linear gradient
+    BlurOriginal,  // Blur original background (DSLR cinematic portrait blur)
+    CustomImage    // Composite onto custom background image
 }
 
 public enum VideoExportFormat
@@ -43,7 +45,8 @@ public enum VideoExportFormat
     GreenScreen_Mp4,   // H.264 MP4 (.mp4) with clean #00FF00 green screen background
     CustomBg_Mp4,      // H.264 MP4 (.mp4) composited with custom background
     AlphaMask_Mp4,     // Grayscale matte video (.mp4)
-    PngSequence        // Folder of transparent PNG frames
+    PngSequence,       // Folder of transparent PNG frames
+    AnimatedGif        // Animated GIF with transparency - Discord / Web / Messenger
 }
 
 public enum ImageExportFormat

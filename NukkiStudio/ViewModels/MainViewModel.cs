@@ -20,6 +20,8 @@ public partial class MainViewModel : ObservableObject
     private readonly WebCloudMattingEngine _webCloudEngine;
     private readonly ModelManager _modelManager;
     private readonly DialogService _dialogService;
+    private readonly System.Windows.Threading.DispatcherTimer _videoPlaybackTimer;
+    private bool _isSeeking;
     private CancellationTokenSource? _processingCts;
 
     [ObservableProperty]
@@ -52,6 +54,77 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _customBgImagePath;
+
+    // Subject Visual Effects
+    [ObservableProperty]
+    private bool _enableStroke = false;
+
+    [ObservableProperty]
+    private int _strokeThickness = 4;
+
+    [ObservableProperty]
+    private Color _strokeColor = Colors.White;
+
+    [ObservableProperty]
+    private bool _enableShadow = false;
+
+    [ObservableProperty]
+    private double _shadowBlur = 12.0;
+
+    [ObservableProperty]
+    private double _shadowOpacity = 0.5;
+
+    [ObservableProperty]
+    private double _shadowOffsetY = 8.0;
+
+    [ObservableProperty]
+    private Color _shadowColor = Colors.Black;
+
+    [ObservableProperty]
+    private bool _enableBgBlur = false;
+
+    [ObservableProperty]
+    private int _bgBlurRadius = 15;
+
+    [ObservableProperty]
+    private double _brightness = 0.0;
+
+    [ObservableProperty]
+    private double _contrast = 1.0;
+
+    [ObservableProperty]
+    private double _saturation = 1.0;
+
+    // Video Player & Scrubber State
+    [ObservableProperty]
+    private bool _isVideoLoaded;
+
+    [ObservableProperty]
+    private double _videoCurrentTime = 0.0;
+
+    [ObservableProperty]
+    private double _videoDuration = 0.0;
+
+    [ObservableProperty]
+    private string _videoTimeDisplay = "00:00.0 / 00:00.0";
+
+    [ObservableProperty]
+    private string _videoResolutionFpsText = "";
+
+    [ObservableProperty]
+    private bool _isPlayingVideo;
+
+    [ObservableProperty]
+    private string _playPauseIcon = "▶";
+
+    [ObservableProperty]
+    private bool _isLoopPlayback = true;
+
+    [ObservableProperty]
+    private double _videoTrimStart = 0.0;
+
+    [ObservableProperty]
+    private double _videoTrimEnd = 0.0;
 
     [ObservableProperty]
     private VideoExportFormat _selectedVideoFormat = VideoExportFormat.ProRes4444_Mov;
@@ -262,6 +335,12 @@ public partial class MainViewModel : ObservableObject
         _modelManager = new ModelManager();
         _dialogService = new DialogService();
 
+        _videoPlaybackTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(120)
+        };
+        _videoPlaybackTimer.Tick += VideoPlaybackTimer_Tick;
+
         LoadPersistedSettings();
 
         OutputDirectory = Path.Combine(
@@ -334,6 +413,31 @@ public partial class MainViewModel : ObservableObject
     partial void OnWebApiKeyChanged(string value) => SavePersistedSettings();
     partial void OnWebEndpointUrlChanged(string value) => SavePersistedSettings();
     partial void OnSelectedWebProviderChanged(WebMattingProvider value) => UpdateLivePreview();
+
+    // Subject Visual Effects & Grading Hooks
+    partial void OnEnableStrokeChanged(bool value) => UpdateLivePreview();
+    partial void OnStrokeThicknessChanged(int value) => UpdateLivePreview();
+    partial void OnStrokeColorChanged(Color value) => UpdateLivePreview();
+    partial void OnEnableShadowChanged(bool value) => UpdateLivePreview();
+    partial void OnShadowBlurChanged(double value) => UpdateLivePreview();
+    partial void OnShadowOpacityChanged(double value) => UpdateLivePreview();
+    partial void OnShadowOffsetYChanged(double value) => UpdateLivePreview();
+    partial void OnShadowColorChanged(Color value) => UpdateLivePreview();
+    partial void OnEnableBgBlurChanged(bool value) => UpdateLivePreview();
+    partial void OnBgBlurRadiusChanged(int value) => UpdateLivePreview();
+    partial void OnBrightnessChanged(double value) => UpdateLivePreview();
+    partial void OnContrastChanged(double value) => UpdateLivePreview();
+    partial void OnSaturationChanged(double value) => UpdateLivePreview();
+
+    // Video Timeline Scrubber Hook
+    partial void OnVideoCurrentTimeChanged(double value)
+    {
+        UpdateVideoTimeDisplay();
+        if (!IsPlayingVideo)
+        {
+            _ = SeekToTimeAsync(value);
+        }
+    }
 
     partial void OnIsEasyModeChanged(bool value)
     {
@@ -851,6 +955,28 @@ public partial class MainViewModel : ObservableObject
             AutoDetectBackgroundColor(item.OriginalPreview);
         }
 
+        if (item.Type == MediaType.Video)
+        {
+            IsVideoLoaded = true;
+            if (item.VideoMetadata != null)
+            {
+                VideoDuration = item.VideoMetadata.DurationSeconds;
+                VideoTrimStart = 0.0;
+                VideoTrimEnd = VideoDuration;
+                VideoCurrentTime = Math.Min(1.0, VideoDuration);
+                VideoResolutionFpsText = $"{item.VideoMetadata.Width}x{item.VideoMetadata.Height} @ {item.VideoMetadata.Fps:F1}fps ({TimeSpan.FromSeconds(item.VideoMetadata.DurationSeconds):mm\\:ss})";
+                UpdateVideoTimeDisplay();
+            }
+        }
+        else
+        {
+            IsVideoLoaded = false;
+            VideoDuration = 0.0;
+            VideoCurrentTime = 0.0;
+            VideoResolutionFpsText = item.OriginalPreview != null ? $"{item.OriginalPreview.PixelWidth}x{item.OriginalPreview.PixelHeight}px" : "";
+            UpdateVideoTimeDisplay();
+        }
+
         if (IsEasyMode)
         {
             SelectedMode = MattingMode.AiNeural;
@@ -927,6 +1053,16 @@ public partial class MainViewModel : ObservableObject
             {
                 bgPixels = ImageProcessor.LoadResizedBackgroundBuffer(currentSettings.CustomBgImagePath, width, height);
                 if (bgPixels != null) ImageProcessor.SwapRedBlue(bgPixels, width, height);
+            }
+            else if (currentSettings.BgType == BackgroundType.Gradient)
+            {
+                bgPixels = ImageProcessor.CreateGradientBackground(width, height, Color.FromRgb(30, 41, 59), Color.FromRgb(15, 23, 42));
+            }
+            else if (currentSettings.BgType == BackgroundType.BlurOriginal)
+            {
+                byte[] origClone = new byte[pixels.Length];
+                Buffer.BlockCopy(pixels, 0, origClone, 0, pixels.Length);
+                bgPixels = ImageProcessor.CreateBlurredBackground(origClone, width, height, currentSettings.BgBlurRadius);
             }
 
             IMattingEngine engine = GetEngineForMode(SelectedMode);
@@ -1227,6 +1363,199 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    // ==========================================
+    // Video Player, Timeline Scrubbing & Trimming
+    // ==========================================
+
+    private async void VideoPlaybackTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!IsVideoLoaded || SelectedItem?.Type != MediaType.Video || _isSeeking) return;
+
+        double nextTime = VideoCurrentTime + 0.12;
+        double maxTime = VideoTrimEnd > 0 ? VideoTrimEnd : VideoDuration;
+        if (nextTime > maxTime)
+        {
+            if (IsLoopPlayback)
+            {
+                nextTime = VideoTrimStart;
+            }
+            else
+            {
+                IsPlayingVideo = false;
+                PlayPauseIcon = "▶";
+                _videoPlaybackTimer.Stop();
+                return;
+            }
+        }
+
+        VideoCurrentTime = nextTime;
+        UpdateVideoTimeDisplay();
+        await SeekToTimeAsync(VideoCurrentTime);
+    }
+
+    [RelayCommand]
+    public void TogglePlayPause()
+    {
+        if (!IsVideoLoaded || SelectedItem?.Type != MediaType.Video) return;
+
+        IsPlayingVideo = !IsPlayingVideo;
+        PlayPauseIcon = IsPlayingVideo ? "⏸" : "▶";
+
+        if (IsPlayingVideo)
+        {
+            if (VideoTrimEnd > 0 && VideoCurrentTime >= VideoTrimEnd)
+            {
+                VideoCurrentTime = VideoTrimStart;
+            }
+            _videoPlaybackTimer.Start();
+        }
+        else
+        {
+            _videoPlaybackTimer.Stop();
+        }
+    }
+
+    [RelayCommand]
+    public async Task StepFrameForwardAsync()
+    {
+        if (!IsVideoLoaded) return;
+        double fps = SelectedItem?.VideoMetadata?.Fps ?? 30.0;
+        double step = fps > 0 ? 1.0 / fps : 0.033;
+        double maxTime = VideoTrimEnd > 0 ? VideoTrimEnd : VideoDuration;
+        VideoCurrentTime = Math.Min(maxTime, VideoCurrentTime + step);
+        UpdateVideoTimeDisplay();
+        await SeekToTimeAsync(VideoCurrentTime);
+    }
+
+    [RelayCommand]
+    public async Task StepFrameBackwardAsync()
+    {
+        if (!IsVideoLoaded) return;
+        double fps = SelectedItem?.VideoMetadata?.Fps ?? 30.0;
+        double step = fps > 0 ? 1.0 / fps : 0.033;
+        VideoCurrentTime = Math.Max(VideoTrimStart, VideoCurrentTime - step);
+        UpdateVideoTimeDisplay();
+        await SeekToTimeAsync(VideoCurrentTime);
+    }
+
+    [RelayCommand]
+    public async Task SeekToStartAsync()
+    {
+        if (!IsVideoLoaded) return;
+        VideoCurrentTime = VideoTrimStart;
+        UpdateVideoTimeDisplay();
+        await SeekToTimeAsync(VideoCurrentTime);
+    }
+
+    [RelayCommand]
+    public async Task SeekToEndAsync()
+    {
+        if (!IsVideoLoaded) return;
+        VideoCurrentTime = VideoTrimEnd > 0 ? VideoTrimEnd : VideoDuration;
+        UpdateVideoTimeDisplay();
+        await SeekToTimeAsync(VideoCurrentTime);
+    }
+
+    [RelayCommand]
+    public void SetTrimStart()
+    {
+        if (!IsVideoLoaded) return;
+        VideoTrimStart = Math.Max(0.0, Math.Round(VideoCurrentTime, 2));
+        if (VideoTrimEnd <= VideoTrimStart) VideoTrimEnd = VideoDuration;
+        StatusMessage = $"영상 시작 지점(Trim In) 설정: {FormatTime(VideoTrimStart)}";
+    }
+
+    [RelayCommand]
+    public void SetTrimEnd()
+    {
+        if (!IsVideoLoaded) return;
+        VideoTrimEnd = Math.Min(VideoDuration, Math.Round(VideoCurrentTime, 2));
+        if (VideoTrimEnd <= VideoTrimStart) VideoTrimStart = 0;
+        StatusMessage = $"영상 종료 지점(Trim Out) 설정: {FormatTime(VideoTrimEnd)}";
+    }
+
+    [RelayCommand]
+    public void ResetTrim()
+    {
+        if (!IsVideoLoaded) return;
+        VideoTrimStart = 0;
+        VideoTrimEnd = VideoDuration;
+        StatusMessage = "영상 자르기(Trim) 초기화 완료";
+    }
+
+    public async Task SeekToTimeAsync(double timeSeconds)
+    {
+        if (SelectedItem?.Type != MediaType.Video || !_ffmpegService.IsFFmpegInstalled) return;
+        if (_isSeeking) return;
+
+        try
+        {
+            _isSeeking = true;
+            var bmp = await _ffmpegService.ExtractThumbnailAsync(SelectedItem.FilePath, timeSeconds);
+            if (bmp != null)
+            {
+                OriginalPreviewImage = bmp;
+                UpdateLivePreview();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Seek error: {ex.Message}");
+        }
+        finally
+        {
+            _isSeeking = false;
+        }
+    }
+
+    private string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return $"{ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100:D1}";
+    }
+
+    private void UpdateVideoTimeDisplay()
+    {
+        VideoTimeDisplay = $"{FormatTime(VideoCurrentTime)} / {FormatTime(VideoDuration)}";
+    }
+
+    // ==========================================
+    // Easy Mode & Quick Effects Commands
+    // ==========================================
+
+    [RelayCommand]
+    public void SetEasyBgBlur()
+    {
+        SelectedBgType = BackgroundType.BlurOriginal;
+        EnableBgBlur = true;
+        StatusMessage = "배경 블러(DSLR 감성 포커스) 적용됨";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void SetEasyBgGradient()
+    {
+        SelectedBgType = BackgroundType.Gradient;
+        StatusMessage = "스튜디오 프리미엄 그라데이션 배경 적용됨";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ToggleStroke()
+    {
+        EnableStroke = !EnableStroke;
+        StatusMessage = EnableStroke ? "스티커 외곽선(스트로크) 활성화" : "스티커 외곽선 비활성화";
+        UpdateLivePreview();
+    }
+
+    [RelayCommand]
+    public void ToggleShadow()
+    {
+        EnableShadow = !EnableShadow;
+        StatusMessage = EnableShadow ? "입체 드롭 섀도우(그림자) 활성화" : "입체 그림자 비활성화";
+        UpdateLivePreview();
+    }
+
     [RelayCommand]
     public async Task StartProcessingAsync()
     {
@@ -1331,6 +1660,16 @@ public partial class MainViewModel : ObservableObject
                 bgPixels = ImageProcessor.LoadResizedBackgroundBuffer(settings.CustomBgImagePath, width, height);
                 if (bgPixels != null) ImageProcessor.SwapRedBlue(bgPixels, width, height);
             }
+            else if (settings.BgType == BackgroundType.Gradient)
+            {
+                bgPixels = ImageProcessor.CreateGradientBackground(width, height, Color.FromRgb(30, 41, 59), Color.FromRgb(15, 23, 42));
+            }
+            else if (settings.BgType == BackgroundType.BlurOriginal)
+            {
+                byte[] origClone = new byte[pixels.Length];
+                Buffer.BlockCopy(pixels, 0, origClone, 0, pixels.Length);
+                bgPixels = ImageProcessor.CreateBlurredBackground(origClone, width, height, settings.BgBlurRadius);
+            }
 
             IMattingEngine engine = GetEngineForMode(settings.Mode);
 
@@ -1370,6 +1709,7 @@ public partial class MainViewModel : ObservableObject
             VideoExportFormat.WebM_VP9 => ".webm",
             VideoExportFormat.AlphaMask_Mp4 => "_mask.mp4",
             VideoExportFormat.PngSequence => "_frames",
+            VideoExportFormat.AnimatedGif => ".gif",
             _ => ".mp4"
         };
 
@@ -1496,6 +1836,21 @@ public partial class MainViewModel : ObservableObject
             WebEndpointUrl = WebEndpointUrl,
             CustomBgColor = CustomBgColor,
             CustomBgImagePath = CustomBgImagePath,
+            EnableStroke = EnableStroke,
+            StrokeThickness = StrokeThickness,
+            StrokeColor = StrokeColor,
+            EnableShadow = EnableShadow,
+            ShadowBlur = ShadowBlur,
+            ShadowOpacity = ShadowOpacity,
+            ShadowOffsetY = ShadowOffsetY,
+            ShadowColor = ShadowColor,
+            EnableBgBlur = EnableBgBlur,
+            BgBlurRadius = BgBlurRadius,
+            Brightness = Brightness,
+            Contrast = Contrast,
+            Saturation = Saturation,
+            TrimStartTime = VideoTrimStart,
+            TrimEndTime = VideoTrimEnd,
             VideoFormat = SelectedVideoFormat,
             ImageFormat = SelectedImageFormat,
             PreserveAudio = PreserveAudio,
